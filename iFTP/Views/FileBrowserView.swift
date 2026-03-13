@@ -152,6 +152,7 @@ struct FileBrowserView: View {
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
+                .textSelection(.enabled)
             Button("Retry") {
                 Task { await viewModel.refresh() }
             }
