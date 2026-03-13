@@ -4,3 +4,11 @@ Known issue:
     Fixed by pickle when adding new insecure toggle
 - Fix all the issues reported by xcode
 - There are some thread issue with the network code, need to fix that (especially given it's the main reason I'm leaving cyberduck for)
+
+
+- AGENTS.md file.
+    - Add "use xcode MCP over any CLI tool whenever you have the chance"
+        - Super useful to avoid issue with swift packages
+    - Also add the scope of the project
+        - not a full fledge FTP server, only one use for browsing/download.
+        - No support for operations that modify remote objects)

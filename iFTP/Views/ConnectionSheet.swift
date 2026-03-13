@@ -4,7 +4,6 @@ struct ConnectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     
     @Binding var server: FTPServer?
-    let isEditing: Bool
     let onSave: (FTPServer) -> Void
     
     @State private var name: String = ""
@@ -13,23 +12,10 @@ struct ConnectionSheet: View {
     @State private var username: String = ""
     @State private var password: String = ""
     @State private var privateKeyPath: String = ""
+    @State private var useTLS: Bool = false
     @State private var allowInsecureTLS: Bool = false
     
-    init(server: Binding<FTPServer?>, isEditing: Bool, onSave: @escaping (FTPServer) -> Void) {
-        self._server = server
-        self.isEditing = isEditing
-        self.onSave = onSave
-        
-        if let existingServer = server.wrappedValue {
-            _name = State(initialValue: existingServer.name)
-            _host = State(initialValue: existingServer.host)
-            _port = State(initialValue: String(existingServer.port))
-            _username = State(initialValue: existingServer.username)
-            _password = State(initialValue: existingServer.password)
-            _privateKeyPath = State(initialValue: existingServer.privateKeyPath ?? "")
-            _allowInsecureTLS = State(initialValue: existingServer.allowInsecureTLS)
-        }
-    }
+    private var isEditing: Bool { server != nil }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -73,13 +59,17 @@ struct ConnectionSheet: View {
                 }
                 
                 Section {
-                    Toggle("Allow invalid TLS certificates", isOn: $allowInsecureTLS)
+                    Toggle("Use TLS/SSL (FTPS)", isOn: $useTLS)
                     
-                    Text("Enable this if the server uses an expired or self-signed certificate")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    if useTLS {
+                        Toggle("Allow invalid TLS certificates", isOn: $allowInsecureTLS)
+                        
+                        Text("Enable this if the server uses an expired or self-signed certificate")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 } header: {
-                    Text("Security")
+                    Text("Connection")
                 }
             }
             .formStyle(.grouped)
@@ -103,11 +93,27 @@ struct ConnectionSheet: View {
             }
             .padding()
         }
-        .frame(width: 450, height: 400)
+        .frame(width: 450, height: 450)
+        .onAppear {
+            loadServerData()
+        }
     }
     
     private var isValid: Bool {
         !host.isEmpty && !username.isEmpty && Int(port) != nil
+    }
+    
+    private func loadServerData() {
+        if let existingServer = server {
+            name = existingServer.name
+            host = existingServer.host
+            port = String(existingServer.port)
+            username = existingServer.username
+            password = existingServer.password
+            privateKeyPath = existingServer.privateKeyPath ?? ""
+            useTLS = existingServer.useTLS
+            allowInsecureTLS = existingServer.allowInsecureTLS
+        }
     }
     
     private func selectPrivateKey() {
@@ -134,6 +140,7 @@ struct ConnectionSheet: View {
                 username: username,
                 password: password,
                 privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath,
+                useTLS: useTLS,
                 allowInsecureTLS: allowInsecureTLS
             )
         } else {
@@ -144,6 +151,7 @@ struct ConnectionSheet: View {
                 username: username,
                 password: password,
                 privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath,
+                useTLS: useTLS,
                 allowInsecureTLS: allowInsecureTLS
             )
         }

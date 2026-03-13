@@ -37,8 +37,7 @@ struct MainView: View {
         .navigationSplitViewStyle(.balanced)
         .sheet(isPresented: $showingConnectionSheet) {
             ConnectionSheet(
-                server: $editingConnection,
-                isEditing: editingConnection != nil
+                server: $editingConnection
             ) { server in
                 if editingConnection != nil {
                     connectionViewModel.updateConnection(server)

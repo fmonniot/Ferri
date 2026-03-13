@@ -8,6 +8,7 @@ struct FTPServer: Identifiable, Codable, Hashable {
     var username: String
     var password: String
     var privateKeyPath: String?
+    var useTLS: Bool
     var allowInsecureTLS: Bool
     
     init(
@@ -18,6 +19,7 @@ struct FTPServer: Identifiable, Codable, Hashable {
         username: String = "",
         password: String = "",
         privateKeyPath: String? = nil,
+        useTLS: Bool = false,
         allowInsecureTLS: Bool = false
     ) {
         self.id = id
@@ -27,6 +29,7 @@ struct FTPServer: Identifiable, Codable, Hashable {
         self.username = username
         self.password = password
         self.privateKeyPath = privateKeyPath
+        self.useTLS = useTLS
         self.allowInsecureTLS = allowInsecureTLS
     }
     
@@ -35,7 +38,7 @@ struct FTPServer: Identifiable, Codable, Hashable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case id, name, host, port, username, password, privateKeyPath, allowInsecureTLS
+        case id, name, host, port, username, password, privateKeyPath, useTLS, allowInsecureTLS
     }
     
     init(from decoder: Decoder) throws {
@@ -47,6 +50,7 @@ struct FTPServer: Identifiable, Codable, Hashable {
         username = try container.decode(String.self, forKey: .username)
         password = try container.decode(String.self, forKey: .password)
         privateKeyPath = try container.decodeIfPresent(String.self, forKey: .privateKeyPath)
+        useTLS = try container.decodeIfPresent(Bool.self, forKey: .useTLS) ?? false
         allowInsecureTLS = try container.decodeIfPresent(Bool.self, forKey: .allowInsecureTLS) ?? false
     }
 }
