@@ -286,15 +286,69 @@ final class FTPClient: NSObject {
             throw FTPError.connectionFailed("No response from server")
         }
         
-        let response = sendCommand("USER \(server.username)")
-        if response.hasPrefix("331") {
+        let userResponse = sendCommand("USER \(server.username)")
+        print("USER response: \(userResponse)")
+        
+        if userResponse.hasPrefix("530") && userResponse.contains("encryption") {
+            print("Server requires TLS, trying AUTH TLS...")
+            let tlsResponse = sendCommand("AUTH TLS")
+            print("AUTH TLS response: \(tlsResponse)")
+            
+            if tlsResponse.hasPrefix("234") {
+                try upgradeToTLS(server: server)
+                
+                let userResponse2 = sendCommand("USER \(server.username)")
+                print("USER response (after TLS): \(userResponse2)")
+                
+                if userResponse2.hasPrefix("331") {
+                    let passResponse = sendCommand("PASS \(server.password)")
+                    print("PASS response: \(passResponse)")
+                    if passResponse.hasPrefix("530") {
+                        throw FTPError.authenticationFailed
+                    }
+                } else if userResponse2.hasPrefix("530") {
+                    throw FTPError.authenticationFailed
+                }
+            } else {
+                throw FTPError.authenticationFailed
+            }
+        } else if userResponse.hasPrefix("331") {
+            print("Sending password...")
             let passResponse = sendCommand("PASS \(server.password)")
+            print("PASS response: \(passResponse)")
             if passResponse.hasPrefix("530") {
                 throw FTPError.authenticationFailed
             }
-        } else if response.hasPrefix("530") {
+        } else if userResponse.hasPrefix("530") {
+            print("USER failed: \(userResponse)")
             throw FTPError.authenticationFailed
+        } else {
+            print("Unexpected USER response: \(userResponse)")
         }
+    }
+    
+    private func upgradeToTLS(server: FTPServer) throws {
+        guard let input = inputStream, let output = outputStream else {
+            throw FTPError.connectionFailed("Streams not available")
+        }
+        
+        var sslSettings: [String: Any] = [
+            kCFStreamSSLLevel as String: kCFStreamSocketSecurityLevelNegotiatedSSL as String
+        ]
+        
+        if server.allowInsecureTLS {
+            sslSettings[kCFStreamSSLValidatesCertificateChain as String] = false
+            print("TLS certificate validation disabled")
+        }
+        
+        input.setProperty(sslSettings, forKey: kCFStreamPropertySSLSettings as Stream.PropertyKey)
+        output.setProperty(sslSettings, forKey: kCFStreamPropertySSLSettings as Stream.PropertyKey)
+        
+        let response = sendCommand("PBSZ 0")
+        print("PBSZ response: \(response)")
+        
+        let protResponse = sendCommand("PROT P")
+        print("PROT response: \(protResponse)")
     }
     
     private func waitForStream(_ stream: InputStream?, timeout: TimeInterval) -> Bool {

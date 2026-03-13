@@ -13,6 +13,7 @@ struct ConnectionSheet: View {
     @State private var username: String = ""
     @State private var password: String = ""
     @State private var privateKeyPath: String = ""
+    @State private var allowInsecureTLS: Bool = false
     
     init(server: Binding<FTPServer?>, isEditing: Bool, onSave: @escaping (FTPServer) -> Void) {
         self._server = server
@@ -26,6 +27,7 @@ struct ConnectionSheet: View {
             _username = State(initialValue: existingServer.username)
             _password = State(initialValue: existingServer.password)
             _privateKeyPath = State(initialValue: existingServer.privateKeyPath ?? "")
+            _allowInsecureTLS = State(initialValue: existingServer.allowInsecureTLS)
         }
     }
     
@@ -68,6 +70,16 @@ struct ConnectionSheet: View {
                     }
                 } header: {
                     Text("Authentication")
+                }
+                
+                Section {
+                    Toggle("Allow invalid TLS certificates", isOn: $allowInsecureTLS)
+                    
+                    Text("Enable this if the server uses an expired or self-signed certificate")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } header: {
+                    Text("Security")
                 }
             }
             .formStyle(.grouped)
@@ -121,7 +133,8 @@ struct ConnectionSheet: View {
                 port: Int(port) ?? 21,
                 username: username,
                 password: password,
-                privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath
+                privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath,
+                allowInsecureTLS: allowInsecureTLS
             )
         } else {
             serverToSave = FTPServer(
@@ -130,7 +143,8 @@ struct ConnectionSheet: View {
                 port: Int(port) ?? 21,
                 username: username,
                 password: password,
-                privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath
+                privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath,
+                allowInsecureTLS: allowInsecureTLS
             )
         }
         

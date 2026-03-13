@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		28878F092F63CF110071178E /* SPEC.md in Resources */ = {isa = PBXBuildFile; fileRef = 28878F082F63CF110071178E /* SPEC.md */; };
+		28878F0C2F63CF280071178E /* TODO.md in Resources */ = {isa = PBXBuildFile; fileRef = 28878F0B2F63CF280071178E /* TODO.md */; };
+		28878F0D2F63CF280071178E /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 28878F0A2F63CF280071178E /* README.md */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		28878ECC2F63C1FA0071178E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +33,9 @@
 		28878EBC2F63C1F90071178E /* iFTP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iFTP.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		28878ECB2F63C1FA0071178E /* iFTPTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = iFTPTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		28878ED52F63C1FA0071178E /* iFTPUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = iFTPUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		28878F082F63CF110071178E /* SPEC.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = SPEC.md; sourceTree = "<group>"; };
+		28878F0A2F63CF280071178E /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		28878F0B2F63CF280071178E /* TODO.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = TODO.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +84,9 @@
 		28878EB32F63C1F90071178E = {
 			isa = PBXGroup;
 			children = (
+				28878F082F63CF110071178E /* SPEC.md */,
+				28878F0A2F63CF280071178E /* README.md */,
+				28878F0B2F63CF280071178E /* TODO.md */,
 				28878EBE2F63C1F90071178E /* iFTP */,
 				28878ECE2F63C1FA0071178E /* iFTPTests */,
 				28878ED82F63C1FA0071178E /* iFTPUITests */,
@@ -212,6 +224,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				28878F0C2F63CF280071178E /* TODO.md in Resources */,
+				28878F0D2F63CF280071178E /* README.md in Resources */,
+				28878F092F63CF110071178E /* SPEC.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
