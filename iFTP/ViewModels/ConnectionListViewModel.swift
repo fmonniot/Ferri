@@ -1,0 +1,56 @@
+import Foundation
+import Combine
+
+enum ConnectionStatus {
+    case disconnected
+    case connecting
+    case connected
+    case error(String)
+}
+
+@MainActor
+final class ConnectionListViewModel: ObservableObject {
+    @Published var connections: [FTPServer] = []
+    @Published var selectedConnection: FTPServer?
+    @Published var connectionStatus: [UUID: ConnectionStatus] = [:]
+    
+    private let storage = ConnectionStorage.shared
+    
+    init() {
+        loadConnections()
+    }
+    
+    func loadConnections() {
+        connections = storage.loadConnections()
+        for connection in connections {
+            connectionStatus[connection.id] = .disconnected
+        }
+    }
+    
+    func addConnection(_ server: FTPServer) {
+        storage.addConnection(server)
+        connections.append(server)
+        connectionStatus[server.id] = .disconnected
+    }
+    
+    func updateConnection(_ server: FTPServer) {
+        storage.updateConnection(server)
+        if let index = connections.firstIndex(where: { $0.id == server.id }) {
+            connections[index] = server
+        }
+    }
+    
+    func deleteConnection(_ server: FTPServer) {
+        storage.deleteConnection(server)
+        connections.removeAll { $0.id == server.id }
+        connectionStatus.removeValue(forKey: server.id)
+    }
+    
+    func setConnectionStatus(_ status: ConnectionStatus, for connectionId: UUID) {
+        connectionStatus[connectionId] = status
+    }
+    
+    func selectConnection(_ connection: FTPServer) {
+        selectedConnection = connection
+    }
+}
