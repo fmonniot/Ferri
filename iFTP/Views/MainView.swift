@@ -10,6 +10,9 @@ struct MainView: View {
     @State private var isTransferQueueExpanded = true
     @State private var isConnected = false
     
+    @State private var showingError = false
+    @State private var errorMessage = ""
+    
     var body: some View {
         NavigationSplitView {
             SidebarView(
@@ -45,6 +48,11 @@ struct MainView: View {
                 editingConnection = nil
             }
         }
+        .alert("Connection Error", isPresented: $showingError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage)
+        }
         .onChange(of: connectionViewModel.selectedConnection) { _, newValue in
             if let connection = newValue {
                 connect(to: connection)
@@ -66,6 +74,8 @@ struct MainView: View {
                 await fileBrowserViewModel.loadDirectory()
             } catch {
                 isConnected = false
+                errorMessage = error.localizedDescription
+                showingError = true
                 connectionViewModel.setConnectionStatus(.error(error.localizedDescription), for: server.id)
             }
         }

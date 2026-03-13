@@ -61,6 +61,8 @@ final class FTPClient: NSObject {
     func connect(to server: FTPServer) async throws {
         self.server = server
         
+        print("Connecting to \(server.host):\(server.port) as \(server.username)")
+        
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             DispatchQueue.global().async { [weak self] in
                 guard let self = self else {
@@ -79,6 +81,7 @@ final class FTPClient: NSObject {
                     }
                     continuation.resume()
                 } catch {
+                    print("Connection error: \(error)")
                     continuation.resume(throwing: error)
                 }
             }
@@ -238,6 +241,8 @@ final class FTPClient: NSObject {
     }
     
     private func establishControlConnection(server: FTPServer) throws {
+        print("Creating stream to \(server.host):\(server.port)")
+        
         var readStream: Unmanaged<CFReadStream>?
         var writeStream: Unmanaged<CFWriteStream>?
         
@@ -257,10 +262,29 @@ final class FTPClient: NSObject {
         inputStream = input as InputStream
         outputStream = output as OutputStream
         
+        print("Opening streams...")
         inputStream?.open()
         outputStream?.open()
         
-        _ = readResponse()
+        let inputStatus = inputStream?.streamStatus.rawValue ?? 999
+        print("Waiting for input stream... status: \(inputStatus)")
+        guard waitForStream(inputStream, timeout: 10.0) else {
+            print("Input stream timeout, status: \(inputStream?.streamStatus.rawValue ?? 999)")
+            throw FTPError.timeout
+        }
+        
+        print("Waiting for output stream...")
+        guard waitForStream(outputStream, timeout: 10.0) else {
+            throw FTPError.timeout
+        }
+        
+        print("Reading welcome response...")
+        let welcome = readResponse()
+        print("Welcome: \(welcome)")
+        
+        guard !welcome.isEmpty else {
+            throw FTPError.connectionFailed("No response from server")
+        }
         
         let response = sendCommand("USER \(server.username)")
         if response.hasPrefix("331") {
@@ -271,6 +295,32 @@ final class FTPClient: NSObject {
         } else if response.hasPrefix("530") {
             throw FTPError.authenticationFailed
         }
+    }
+    
+    private func waitForStream(_ stream: InputStream?, timeout: TimeInterval) -> Bool {
+        guard let stream = stream else { return false }
+        
+        let startTime = Date()
+        while stream.streamStatus == .opening {
+            if Date().timeIntervalSince(startTime) > timeout {
+                return false
+            }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        return stream.streamStatus == .open
+    }
+    
+    private func waitForStream(_ stream: OutputStream?, timeout: TimeInterval) -> Bool {
+        guard let stream = stream else { return false }
+        
+        let startTime = Date()
+        while stream.streamStatus == .opening {
+            if Date().timeIntervalSince(startTime) > timeout {
+                return false
+            }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        return stream.streamStatus == .open
     }
     
     private func login(server: FTPServer) throws {
