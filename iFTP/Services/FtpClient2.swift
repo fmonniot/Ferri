@@ -26,9 +26,8 @@ import CryptoKit
 // MARK: - FTP Mode & Server Configuration
 
 enum FTPMode {
-    case plain          // port 21, no TLS
-    case implicitTLS    // port 990, TLS from first byte (FTPS)
-    case explicitTLS    // port 21, plain → AUTH TLS upgrade (FTPES) ← NEW
+    case plain        // port 21, no TLS
+    case explicitTLS  // port 21, plain → AUTH TLS upgrade (FTPES)
 }
 
 struct FTPServerConfig {
@@ -42,10 +41,6 @@ struct FTPServerConfig {
 
     static func plain(host: String, port: UInt16 = 21) -> Self {
         Self(host: host, port: port, mode: .plain, pinnedCertificateData: nil)
-    }
-
-    static func implicitTLS(host: String, port: UInt16 = 990, pinnedCert: Data? = nil) -> Self {
-        Self(host: host, port: port, mode: .implicitTLS, pinnedCertificateData: pinnedCert)
     }
 
     static func explicitTLS(host: String, port: UInt16 = 21, pinnedCert: Data? = nil) -> Self {
@@ -143,12 +138,17 @@ private func makeTLSHandler(
     serverHostname: String,
     config: FTPServerConfig,
     tofuStore: TOFUStore,
-    onFirstUse: ((String) -> Void)?
+    onFirstUse: ((String) -> Void)?,
+    externalTLSContext: NIOSSLContext? = nil
 ) throws -> NIOSSLClientHandler {
-    var tlsConfig = TLSConfiguration.makeClientConfiguration()
-    tlsConfig.certificateVerification = .none // custom callback owns all trust decisions
-
-    let sslContext = try NIOSSLContext(configuration: tlsConfig)
+    let tlsConfig = TLSConfiguration.makeClientConfiguration()
+    let sslContext: NIOSSLContext
+    if let external = externalTLSContext {
+        sslContext = external
+    } else {
+        sslContext = try NIOSSLContext(configuration: tlsConfig)
+    }
+    
     let pinnedData = config.pinnedCertificateData
     let host       = config.host
     let port       = config.port
@@ -332,6 +332,7 @@ final class TCPConnection {
 
     private var channel: (any Channel)?
     private var lineHandler: FTPLineHandler?
+    private(set) var tlsContext: NIOSSLContext?
 
     var onTOFUFirstUse: ((String) -> Void)?
 
@@ -347,9 +348,8 @@ final class TCPConnection {
         let handler = FTPLineHandler()
         lineHandler = handler
 
-        // Implicit TLS: SSL handler added at bootstrap.
-        // Explicit TLS: start plain, then call upgradeTLS() separately.
-        let addTLSAtBoot = (config.mode == .implicitTLS)
+        // Always start with plain connection - TLS upgrade happens separately for explicitTLS
+        let addTLSAtBoot = false
         let onFirst = onTOFUFirstUse
 
         channel = try await ClientBootstrap(group: group)
@@ -383,11 +383,17 @@ final class TCPConnection {
     func upgradeTLS() async throws {
         guard let channel else { throw FTPError.connectionFailed("No active channel") }
 
+        // Create and store TLS context for session reuse
+        var tlsConfig = TLSConfiguration.makeClientConfiguration()
+        tlsConfig.certificateVerification = .none
+        tlsContext = try NIOSSLContext(configuration: tlsConfig)
+
         let sslHandler = try makeTLSHandler(
             serverHostname: config.host,
             config: config,
             tofuStore: tofuStore,
-            onFirstUse: onTOFUFirstUse
+            onFirstUse: onTOFUFirstUse,
+            externalTLSContext: tlsContext
         )
 
         do {
@@ -428,55 +434,72 @@ final class FTPDataChannel {
     private let config: FTPServerConfig
     private let tofuStore: TOFUStore
     private let group: MultiThreadedEventLoopGroup
+    private let tlsContext: NIOSSLContext?
 
     private var channel: (any Channel)?
     private var streamHandler: FTPStreamHandler?
 
     var onTOFUFirstUse: ((String) -> Void)?
 
-    init(config: FTPServerConfig, tofuStore: TOFUStore, group: MultiThreadedEventLoopGroup) {
+    init(config: FTPServerConfig, tofuStore: TOFUStore, group: MultiThreadedEventLoopGroup, tlsContext: NIOSSLContext? = nil) {
         self.config    = config
         self.tofuStore = tofuStore
         self.group     = group
+        self.tlsContext = tlsContext
     }
 
     // MARK: Connect → returns an inbound stream (for download/listing)
 
-    func connect(host: String, port: UInt16) async throws -> AsyncThrowingStream<Data, Error> {
+    func connect(host: String, port: UInt16, sniHostname: String? = nil) async throws -> AsyncThrowingStream<Data, Error> {
+        print("📂 FTPDataChannel: connecting to \(host):\(port)")
         let handler = FTPStreamHandler()
         streamHandler = handler
 
         // Inherit TLS mode from control channel config.
-        // (The data config uses .implicitTLS so TLS is added at bootstrap,
-        //  regardless of whether the control used implicit or explicit.)
         let dataTLS = config.usesTLS
         let onFirst = onTOFUFirstUse
         let dataConfig = FTPServerConfig(
             host: host, port: port,
-            mode: dataTLS ? .implicitTLS : .plain,
+            mode: dataTLS ? .explicitTLS : .plain,
             pinnedCertificateData: config.pinnedCertificateData
         )
 
-        channel = try await ClientBootstrap(group: group)
-            .channelInitializer { [tofuStore] channel in
-                do {
-                    var handlers: [any ChannelHandler] = [handler]
-                    if dataTLS {
-                        let ssl = try makeTLSHandler(
-                            serverHostname: host,
-                            config: dataConfig,
-                            tofuStore: tofuStore,
-                            onFirstUse: onFirst
-                        )
-                        handlers.insert(ssl, at: 0)
+        // Capture tlsContext for session reuse
+        let existingTLSContext = tlsContext
+
+        print("📂 FTPDataChannel: creating bootstrap, TLS: \(dataTLS), session reuse: \(existingTLSContext != nil)")
+        
+        do {
+            let sniHost = sniHostname ?? config.host
+            let connectionFuture = ClientBootstrap(group: group)
+                .channelInitializer { [tofuStore] channel in
+                    do {
+                        var handlers: [any ChannelHandler] = [handler]
+                        if dataTLS {
+                            let ssl = try makeTLSHandler(
+                                serverHostname: sniHost,
+                                config: dataConfig,
+                                tofuStore: tofuStore,
+                                onFirstUse: onFirst,
+                                externalTLSContext: existingTLSContext
+                            )
+                            handlers.insert(ssl, at: 0)
+                        }
+                        return channel.pipeline.addHandlers(handlers)
+                    } catch {
+                        return channel.eventLoop.makeFailedFuture(error)
                     }
-                    return channel.pipeline.addHandlers(handlers)
-                } catch {
-                    return channel.eventLoop.makeFailedFuture(error)
                 }
-            }
-            .connect(host: host, port: Int(port))
-            .get()
+                .connectTimeout(.seconds(10))
+                .connect(host: host, port: Int(port))
+            
+            channel = try await connectionFuture.get()
+        } catch {
+            print("📂 FTPDataChannel: connection failed with error: \(error)")
+            throw error
+        }
+        
+        print("📂 FTPDataChannel: channel created successfully!")
 
         return AsyncThrowingStream { continuation in
             handler.attach(continuation)
@@ -511,6 +534,7 @@ actor FTPClient2 {
 
     private var controlChannel: TCPConnection!
     private var dataChannel: FTPDataChannel?
+    private var tlsContext: NIOSSLContext?
 
     /// Called (on an unspecified thread) when a new server certificate is
     /// seen for the first time and stored via TOFU. Surface to the user as a
@@ -536,8 +560,8 @@ actor FTPClient2 {
         try await controlChannel.connectControl()
 
         switch config.mode {
-        case .plain, .implicitTLS:
-            // Greeting arrives immediately after the TCP (or TLS) handshake
+        case .plain:
+            // Greeting arrives immediately after the TCP handshake
             let greeting = try await readResponse()
             print("← \(greeting.code) \(greeting.message)")
 
@@ -642,23 +666,71 @@ actor FTPClient2 {
     // MARK: - Passive Mode
 
     private func openPassiveDataChannel() async throws -> (FTPDataChannel, AsyncThrowingStream<Data, Error>) {
-        print("📂 Sending PASV command...")
-        let resp = try await sendCommand("PASV")
-        guard resp.code == 227 else { throw FTPError.serverError(resp) }
-        let (host, port) = try parsePASV(resp.message)
+        // Try EPSV first (Extended Passive Mode - returns only port)
+        print("📂 Sending EPSV command...")
+        var epsvResp = try? await sendCommand("EPSV")
         
-        print("📂 PASV response: \(host):\(port)")
+        var host: String
+        var port: UInt16
+        
+        if let resp = epsvResp, resp.code == 229 {
+            // EPSV response: 229 Entering Extended Passive Mode (|||port|)
+            if let parsedPort = parseEPSV(resp.message) {
+                host = config.host
+                port = parsedPort
+                print("📂 EPSV response: \(host):\(port)")
+            } else {
+                throw FTPError.invalidPASVResponse(resp.message)
+            }
+        } else {
+            // Fall back to PASV
+            print("📂 Sending PASV command...")
+            let resp = try await sendCommand("PASV")
+            guard resp.code == 227 else { throw FTPError.serverError(resp) }
+            let parsed = try parsePASV(resp.message)
+            host = parsed.0
+            port = parsed.1
+            print("📂 PASV response: \(host):\(port)")
+            
+            // Use original hostname instead of NAT IP if different
+            if host != config.host {
+                print("📂 Using original hostname \(config.host) instead of PASV IP \(host)")
+                host = config.host
+            }
+        }
 
-        let conn = FTPDataChannel(config: config, tofuStore: tofuStore, group: group)
+        // Get TLS context from control channel for session reuse
+        let tlsCtx = controlChannel.tlsContext
+
+        let conn = FTPDataChannel(config: config, tofuStore: tofuStore, group: group, tlsContext: tlsCtx)
         conn.onTOFUFirstUse = { [weak self] fp in
             Task { await self?.fireTOFUFirstUse(fp) }
         }
 
         print("📂 Connecting to data channel...")
-        let stream = try await conn.connect(host: host, port: port)
+        let stream = try await conn.connect(host: host, port: port, sniHostname: config.host)
         print("📂 Data channel connected!")
         dataChannel = conn
         return (conn, stream)
+    }
+    
+    private func parseEPSV(_ message: String) -> UInt16? {
+        // EPSV response: 229 Entering Extended Passive Mode (|||port|)
+        // or: 229 Entering Extended Passive Mode (|||port|)
+        guard let openParen = message.firstIndex(of: "("),
+              let closeParen = message.firstIndex(of: ")") else { return nil }
+        
+        let inner = String(message[message.index(after: openParen)..<closeParen])
+        // Format: |||port| or |IP|port|
+        
+        let parts = inner.split(separator: "|").filter { !$0.isEmpty }
+        if let lastPart = parts.last, let port = UInt16(lastPart) {
+            return port
+        }
+        
+        // Try alternative: find the last number in the string
+        let numbers = inner.compactMap { String($0) }.joined().split(separator: "|").compactMap { UInt16($0) }
+        return numbers.last
     }
 
     /// Parses `227 Entering Passive Mode (h1,h2,h3,h4,p1,p2).`
