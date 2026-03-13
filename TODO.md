@@ -4,6 +4,7 @@ Known issue:
     Fixed by pickle when adding new insecure toggle
 - Fix all the issues reported by xcode
 - There are some thread issue with the network code, need to fix that (especially given it's the main reason I'm leaving cyberduck for)
+- Understand naming convention about actor usage (e.g. Merge FTPClient with FtpClientActor, remove the suffix, etc…
 
 
 - AGENTS.md file.

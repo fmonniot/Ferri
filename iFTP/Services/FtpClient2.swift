@@ -374,7 +374,7 @@ final class FTPDataChannel {
 // Public API is identical to the previous NWConnection version.
 // Internally, FTPES now works end-to-end.
 
-actor FTPClient2 {
+actor FTPClientActor {
 
     private let config: FTPServerConfig
     private let tofuStore = TOFUStore()

@@ -11,7 +11,7 @@ enum ClientError: Error {
 final class FTPClient: @unchecked Sendable {
     static let shared = FTPClient()
     
-    private var nioClient: FTPClient2?
+    private var nioClient: FTPClientActor?
     private var currentServer: FTPServer?
     
     private(set) var isConnected = false
@@ -29,7 +29,7 @@ final class FTPClient: @unchecked Sendable {
             config = FTPServerConfig.plain(host: server.host, port: UInt16(server.port))
         }
         
-        nioClient = FTPClient2(config: config)
+        nioClient = FTPClientActor(config: config)
         
         try await nioClient?.connect()
         try await nioClient?.login(user: server.username, password: server.password)
