@@ -167,13 +167,13 @@ private func makeTLSHandler(
     )
 }
 
-// MARK: - TCPConnection  (control channel)
+// MARK: - FTP Control Channel connection
 //
 // Key difference from the NWConnection version:
 // upgradeTLS() injects NIOSSLClientHandler into the live pipeline,
 // which is exactly what FTPES / AUTH TLS requires.
 
-final class TCPConnection {
+final class FTPControlChannel {
     private let config: FTPServerConfig
     private let tofuStore: TOFUStore
     private let group: MultiThreadedEventLoopGroup
@@ -271,7 +271,7 @@ final class TCPConnection {
     }
 }
 
-// MARK: - FTPDataChannel  (data channel)
+// MARK: - FTPDataChannel connection
 //
 // Always a fresh TCP connection per transfer.
 // Uses the same TLS factory so certificate policy is identical to the control channel.
@@ -380,7 +380,7 @@ actor FTPClientActor {
     private let tofuStore = TOFUStore()
     private let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
-    private var controlChannel: TCPConnection!
+    private var controlChannel: FTPControlChannel!
     private var dataChannel: FTPDataChannel?
     private var tlsContext: NIOSSLContext?
 
@@ -400,7 +400,7 @@ actor FTPClientActor {
     // MARK: - Connection Lifecycle
 
     func connect() async throws {
-        controlChannel = TCPConnection(config: config, tofuStore: tofuStore, group: group)
+        controlChannel = FTPControlChannel(config: config, tofuStore: tofuStore, group: group)
         controlChannel.onTOFUFirstUse = { [weak self] fp in
             Task { await self?.fireTOFUFirstUse(fp) }
         }
