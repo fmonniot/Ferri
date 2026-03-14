@@ -12,6 +12,7 @@ enum SFTPClientError: Error, CustomStringConvertible {
     case notConnected
     case invalidResponse
     case channelClosed
+    case timeout(String)
 
     var description: String {
         switch self {
@@ -22,6 +23,7 @@ enum SFTPClientError: Error, CustomStringConvertible {
         case .notConnected: return "Not connected"
         case .invalidResponse: return "Invalid response from server"
         case .channelClosed: return "Connection closed"
+        case .timeout(let msg): return "Timeout: \(msg)"
         }
     }
 }
@@ -44,6 +46,8 @@ actor SFTPClient {
 
     private var pendingRequests: [UInt32: CheckedContinuation<SFTPResponse, Error>] = [:]
     private let requestLock = NSLock()
+    
+    var operationTimeout: TimeAmount = .seconds(30)
 
     init() {
         self.protocol_ = SFTPProtocol()
@@ -132,20 +136,20 @@ actor SFTPClient {
         currentPath = "/"
     }
 
-    func listDirectory(path: String) async throws -> [RemoteFile] {
+    func listDirectory(path: String, timeout: TimeAmount? = nil) async throws -> [RemoteFile] {
         guard isConnectedFlag else {
             throw SFTPClientError.notConnected
         }
 
         let absolutePath = resolvePath(path)
         
-        let handle = try await openDirectory(path: absolutePath)
+        let handle = try await openDirectory(path: absolutePath, timeout: timeout)
         defer { Task { try? await closeHandle(handle) } }
 
         var files: [RemoteFile] = []
 
         while true {
-            let entries = try await readDirectory(handle: handle)
+            let entries = try await readDirectory(handle: handle, timeout: timeout)
             if entries.isEmpty { break }
 
             for entry in entries {
@@ -262,6 +266,29 @@ actor SFTPClient {
             }
         }
     }
+    
+    private func sendRequestWithTimeout(_ request: SFTPRequest, timeout: TimeAmount? = nil) async throws -> SFTPResponse {
+        let effectiveTimeout = timeout ?? operationTimeout
+        
+        return try await withThrowingTaskGroup(of: SFTPResponse.self) { group in
+            group.addTask {
+                try await self.sendRequest(request)
+            }
+            
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(effectiveTimeout.nanoseconds))
+                throw SFTPClientError.timeout("Request timed out after \(effectiveTimeout)")
+            }
+            
+            do {
+                let response = try await group.next()!
+                group.cancelAll()
+                return response
+            } catch is CancellationError {
+                throw SFTPClientError.timeout("Request timed out")
+            }
+        }
+    }
 
     func handleResponse(_ response: SFTPResponse, requestId: UInt32) {
         print("[SFTPClient] Received response for request \(requestId)")
@@ -272,7 +299,7 @@ actor SFTPClient {
         continuation?.resume(returning: response)
     }
 
-    private func openFile(path: String, flags: UInt32) async throws -> SFTPHandle {
+    private func openFile(path: String, flags: UInt32, timeout: TimeAmount? = nil) async throws -> SFTPHandle {
         let request = SFTPOpenRequest(
             id: protocol_.nextId(),
             path: path,
@@ -280,7 +307,7 @@ actor SFTPClient {
             attrs: .empty
         )
 
-        let response = try await sendRequest(request)
+        let response = try await sendRequestWithTimeout(request, timeout: timeout)
 
         switch response {
         case .handle(_, let handle):
@@ -292,13 +319,13 @@ actor SFTPClient {
         }
     }
 
-    private func openDirectory(path: String) async throws -> SFTPHandle {
+    private func openDirectory(path: String, timeout: TimeAmount? = nil) async throws -> SFTPHandle {
         let request = SFTPOpendirRequest(
             id: protocol_.nextId(),
             path: path
         )
 
-        let response = try await sendRequest(request)
+        let response = try await sendRequestWithTimeout(request, timeout: timeout)
 
         switch response {
         case .handle(_, let handle):
@@ -310,15 +337,15 @@ actor SFTPClient {
         }
     }
 
-    private func closeHandle(_ handle: SFTPHandle) async throws {
+    private func closeHandle(_ handle: SFTPHandle, timeout: TimeAmount? = nil) async throws {
         let request = SFTPCloseRequest(
             id: protocol_.nextId(),
             handle: handle
         )
-        _ = try await sendRequest(request)
+        _ = try await sendRequestWithTimeout(request, timeout: timeout)
     }
 
-    private func readFromHandle(handle: SFTPHandle, offset: UInt64, length: UInt32) async throws -> ByteBuffer {
+    private func readFromHandle(handle: SFTPHandle, offset: UInt64, length: UInt32, timeout: TimeAmount? = nil) async throws -> ByteBuffer {
         let request = SFTPReadRequest(
             id: protocol_.nextId(),
             handle: handle,
@@ -326,7 +353,7 @@ actor SFTPClient {
             length: length
         )
 
-        let response = try await sendRequest(request)
+        let response = try await sendRequestWithTimeout(request, timeout: timeout)
 
         switch response {
         case .data(_, let data):
@@ -341,7 +368,7 @@ actor SFTPClient {
         }
     }
 
-    private func writeToHandle(handle: SFTPHandle, offset: UInt64, data: ByteBuffer) async throws {
+    private func writeToHandle(handle: SFTPHandle, offset: UInt64, data: ByteBuffer, timeout: TimeAmount? = nil) async throws {
         let request = SFTPWriteRequest(
             id: protocol_.nextId(),
             handle: handle,
@@ -349,20 +376,20 @@ actor SFTPClient {
             data: data
         )
 
-        let response = try await sendRequest(request)
+        let response = try await sendRequestWithTimeout(request, timeout: timeout)
 
         if case .status(_, let code, let message, _) = response, code != 0 {
             throw SFTPClientError.requestFailed(code, message)
         }
     }
 
-    private func readDirectory(handle: SFTPHandle) async throws -> [SFTPDirectoryEntry] {
+    private func readDirectory(handle: SFTPHandle, timeout: TimeAmount? = nil) async throws -> [SFTPDirectoryEntry] {
         let request = SFTPReaddirRequest(
             id: protocol_.nextId(),
             handle: handle
         )
 
-        let response = try await sendRequest(request)
+        let response = try await sendRequestWithTimeout(request, timeout: timeout)
 
         switch response {
         case .name(_, let entries, _):
@@ -376,13 +403,13 @@ actor SFTPClient {
         }
     }
 
-    private func fstatHandle(_ handle: SFTPHandle) async throws -> SFTPFileAttributes {
+    private func fstatHandle(_ handle: SFTPHandle, timeout: TimeAmount? = nil) async throws -> SFTPFileAttributes {
         let request = SFTPFstatRequest(
             id: protocol_.nextId(),
             handle: handle
         )
 
-        let response = try await sendRequest(request)
+        let response = try await sendRequestWithTimeout(request, timeout: timeout)
 
         switch response {
         case .attrs(_, let attrs):
