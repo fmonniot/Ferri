@@ -65,7 +65,7 @@ struct MainView: View {
     private func connect(to server: FTPServer) {
         connectionViewModel.setConnectionStatus(.connecting, for: server.id)
         
-        Task {
+        Task { @MainActor in
             do {
                 try await FTPClient.shared.connect(to: server)
                 isConnected = true
