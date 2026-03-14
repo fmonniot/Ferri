@@ -54,7 +54,7 @@
 - Buttons: Clear completed, Cancel all
 
 #### Connection Sheet
-- Fields: Name, Host, Port (default 21), Username, Password, Private Key (optional)
+- Fields: Name, Host, Port (default 22), Username, Password, Private Key (optional), Key Passphrase (optional)
 - Buttons: Cancel, Save (or Connect)
 
 ## 3. Functionality Specification

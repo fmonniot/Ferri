@@ -8,19 +8,17 @@ struct FTPServer: Identifiable, Codable, Hashable {
     var username: String
     var password: String
     var privateKeyPath: String?
-    var useTLS: Bool
-    var allowInsecureTLS: Bool
+    var keyPassphrase: String?
     
     init(
         id: UUID = UUID(),
         name: String = "",
         host: String = "",
-        port: Int = 21,
+        port: Int = 22,
         username: String = "",
         password: String = "",
         privateKeyPath: String? = nil,
-        useTLS: Bool = false,
-        allowInsecureTLS: Bool = false
+        keyPassphrase: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -29,8 +27,7 @@ struct FTPServer: Identifiable, Codable, Hashable {
         self.username = username
         self.password = password
         self.privateKeyPath = privateKeyPath
-        self.useTLS = useTLS
-        self.allowInsecureTLS = allowInsecureTLS
+        self.keyPassphrase = keyPassphrase
     }
     
     var displayName: String {
@@ -38,7 +35,7 @@ struct FTPServer: Identifiable, Codable, Hashable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case id, name, host, port, username, password, privateKeyPath, useTLS, allowInsecureTLS
+        case id, name, host, port, username, password, privateKeyPath, keyPassphrase
     }
     
     init(from decoder: Decoder) throws {
@@ -46,11 +43,10 @@ struct FTPServer: Identifiable, Codable, Hashable {
         id = try container.decode(UUID.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         host = try container.decode(String.self, forKey: .host)
-        port = try container.decode(Int.self, forKey: .port)
+        port = try container.decodeIfPresent(Int.self, forKey: .port) ?? 22
         username = try container.decode(String.self, forKey: .username)
         password = try container.decode(String.self, forKey: .password)
         privateKeyPath = try container.decodeIfPresent(String.self, forKey: .privateKeyPath)
-        useTLS = try container.decodeIfPresent(Bool.self, forKey: .useTLS) ?? false
-        allowInsecureTLS = try container.decodeIfPresent(Bool.self, forKey: .allowInsecureTLS) ?? false
+        keyPassphrase = try container.decodeIfPresent(String.self, forKey: .keyPassphrase)
     }
 }

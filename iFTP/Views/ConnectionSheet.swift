@@ -8,12 +8,11 @@ struct ConnectionSheet: View {
     
     @State private var name: String = ""
     @State private var host: String = ""
-    @State private var port: String = "21"
+    @State private var port: String = "22"
     @State private var username: String = ""
     @State private var password: String = ""
     @State private var privateKeyPath: String = ""
-    @State private var useTLS: Bool = false
-    @State private var allowInsecureTLS: Bool = false
+    @State private var keyPassphrase: String = ""
     
     private var isEditing: Bool { server != nil }
     
@@ -54,22 +53,11 @@ struct ConnectionSheet: View {
                             selectPrivateKey()
                         }
                     }
+                    
+                    SecureField("Key Passphrase (optional)", text: $keyPassphrase)
+                        .textFieldStyle(.roundedBorder)
                 } header: {
                     Text("Authentication")
-                }
-                
-                Section {
-                    Toggle("Use TLS/SSL (FTPS)", isOn: $useTLS)
-                    
-                    if useTLS {
-                        Toggle("Allow invalid TLS certificates", isOn: $allowInsecureTLS)
-                        
-                        Text("Enable this if the server uses an expired or self-signed certificate")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                } header: {
-                    Text("Connection")
                 }
             }
             .formStyle(.grouped)
@@ -93,7 +81,7 @@ struct ConnectionSheet: View {
             }
             .padding()
         }
-        .frame(width: 450, height: 450)
+        .frame(width: 450, height: 400)
         .onAppear {
             loadServerData()
         }
@@ -111,8 +99,7 @@ struct ConnectionSheet: View {
             username = existingServer.username
             password = existingServer.password
             privateKeyPath = existingServer.privateKeyPath ?? ""
-            useTLS = existingServer.useTLS
-            allowInsecureTLS = existingServer.allowInsecureTLS
+            keyPassphrase = existingServer.keyPassphrase ?? ""
         }
     }
     
@@ -136,23 +123,21 @@ struct ConnectionSheet: View {
                 id: existing.id,
                 name: name,
                 host: host,
-                port: Int(port) ?? 21,
+                port: Int(port) ?? 22,
                 username: username,
                 password: password,
                 privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath,
-                useTLS: useTLS,
-                allowInsecureTLS: allowInsecureTLS
+                keyPassphrase: keyPassphrase.isEmpty ? nil : keyPassphrase
             )
         } else {
             serverToSave = FTPServer(
                 name: name,
                 host: host,
-                port: Int(port) ?? 21,
+                port: Int(port) ?? 22,
                 username: username,
                 password: password,
                 privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath,
-                useTLS: useTLS,
-                allowInsecureTLS: allowInsecureTLS
+                keyPassphrase: keyPassphrase.isEmpty ? nil : keyPassphrase
             )
         }
         
