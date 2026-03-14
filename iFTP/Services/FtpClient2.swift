@@ -107,22 +107,14 @@ private func makeTLSHandler(
     config: FTPServerConfig,
     tofuStore: TOFUStore,
     onFirstUse: ((String) -> Void)?,
-    externalTLSContext: NIOSSLContext? = nil
+    tlsContext: NIOSSLContext
 ) throws -> NIOSSLClientHandler {
-    let tlsConfig = TLSConfiguration.makeClientConfiguration()
-    let sslContext: NIOSSLContext
-    if let external = externalTLSContext {
-        sslContext = external
-    } else {
-        sslContext = try NIOSSLContext(configuration: tlsConfig)
-    }
-    
     let pinnedData = config.pinnedCertificateData
     let host       = config.host
     let port       = config.port
 
     return try NIOSSLClientHandler(
-        context: sslContext,
+        context: tlsContext,
         serverHostname: serverHostname,
         customVerificationCallback: { certs, promise in
             guard let leaf = certs.first else {
@@ -177,17 +169,18 @@ final class FTPControlChannel {
     private let config: FTPServerConfig
     private let tofuStore: TOFUStore
     private let group: MultiThreadedEventLoopGroup
+    private(set) var tlsContext: NIOSSLContext
 
     private var channel: (any Channel)?
     private var lineHandler: FTPLineHandler?
-    private(set) var tlsContext: NIOSSLContext?
 
     var onTOFUFirstUse: ((String) -> Void)?
 
-    init(config: FTPServerConfig, tofuStore: TOFUStore, group: MultiThreadedEventLoopGroup) {
+    init(config: FTPServerConfig, tofuStore: TOFUStore, group: MultiThreadedEventLoopGroup, tlsContext: NIOSSLContext) {
         self.config    = config
         self.tofuStore = tofuStore
         self.group     = group
+        self.tlsContext = tlsContext
     }
 
     // MARK: Connect (plain or implicit TLS)
@@ -231,11 +224,7 @@ final class FTPControlChannel {
     func upgradeTLS() async throws {
         guard let channel else { throw FTPError.connectionFailed("No active channel") }
 
-        // Create and store TLS context for session reuse
-        var tlsConfig = TLSConfiguration.makeClientConfiguration()
-        tlsConfig.certificateVerification = .none
-        tlsContext = try NIOSSLContext(configuration: tlsConfig)
-
+        // Use the pre-created TLS context from init
         let sslHandler = try makeTLSHandler(
             serverHostname: config.host,
             config: config,
@@ -289,7 +278,7 @@ final class FTPDataChannel {
 
     var onTOFUFirstUse: ((String) -> Void)?
 
-    init(config: FTPServerConfig, tofuStore: TOFUStore, group: MultiThreadedEventLoopGroup, tlsContext: NIOSSLContext? = nil) {
+    init(config: FTPServerConfig, tofuStore: TOFUStore, group: MultiThreadedEventLoopGroup, tlsContext: NIOSSLContext) {
         self.config    = config
         self.tofuStore = tofuStore
         self.group     = group
@@ -400,7 +389,12 @@ actor FTPClientActor {
     // MARK: - Connection Lifecycle
 
     func connect() async throws {
-        controlChannel = FTPControlChannel(config: config, tofuStore: tofuStore, group: group)
+        // Create TLS context upfront for session reuse
+        var tlsConfig = TLSConfiguration.makeClientConfiguration()
+        tlsConfig.certificateVerification = .none
+        let tlsCtx = try NIOSSLContext(configuration: tlsConfig)
+        
+        controlChannel = FTPControlChannel(config: config, tofuStore: tofuStore, group: group, tlsContext: tlsCtx)
         controlChannel.onTOFUFirstUse = { [weak self] fp in
             Task { await self?.fireTOFUFirstUse(fp) }
         }
