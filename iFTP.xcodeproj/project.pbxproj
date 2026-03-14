@@ -16,14 +16,14 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		28878ECC2F63C1FA0071178E /* PBXContainerItemProxy */ = {
+		28878ED62F63C1FA0071178E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 28878EB42F63C1F90071178E /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 28878EBB2F63C1F90071178E;
 			remoteInfo = iFTP;
 		};
-		28878ED62F63C1FA0071178E /* PBXContainerItemProxy */ = {
+		2887902E2F65BE5D0071178E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 28878EB42F63C1F90071178E /* Project object */;
 			proxyType = 1;
@@ -34,11 +34,11 @@
 
 /* Begin PBXFileReference section */
 		28878EBC2F63C1F90071178E /* iFTP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iFTP.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		28878ECB2F63C1FA0071178E /* iFTPTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = iFTPTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		28878ED52F63C1FA0071178E /* iFTPUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = iFTPUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		28878F082F63CF110071178E /* SPEC.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = SPEC.md; sourceTree = "<group>"; };
 		28878F0A2F63CF280071178E /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		28878F0B2F63CF280071178E /* TODO.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = TODO.md; sourceTree = "<group>"; };
+		2887902A2F65BE5D0071178E /* iFTPUnitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = iFTPUnitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -47,14 +47,14 @@
 			path = iFTP;
 			sourceTree = "<group>";
 		};
-		28878ECE2F63C1FA0071178E /* iFTPTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = iFTPTests;
-			sourceTree = "<group>";
-		};
 		28878ED82F63C1FA0071178E /* iFTPUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = iFTPUITests;
+			sourceTree = "<group>";
+		};
+		2887902B2F65BE5D0071178E /* iFTPUnitTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = iFTPUnitTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -70,14 +70,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		28878EC82F63C1FA0071178E /* Frameworks */ = {
+		28878ED22F63C1FA0071178E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		28878ED22F63C1FA0071178E /* Frameworks */ = {
+		288790272F65BE5D0071178E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -94,8 +94,8 @@
 				28878F0A2F63CF280071178E /* README.md */,
 				28878F0B2F63CF280071178E /* TODO.md */,
 				28878EBE2F63C1F90071178E /* iFTP */,
-				28878ECE2F63C1FA0071178E /* iFTPTests */,
 				28878ED82F63C1FA0071178E /* iFTPUITests */,
+				2887902B2F65BE5D0071178E /* iFTPUnitTests */,
 				28878EBD2F63C1F90071178E /* Products */,
 			);
 			sourceTree = "<group>";
@@ -104,8 +104,8 @@
 			isa = PBXGroup;
 			children = (
 				28878EBC2F63C1F90071178E /* iFTP.app */,
-				28878ECB2F63C1FA0071178E /* iFTPTests.xctest */,
 				28878ED52F63C1FA0071178E /* iFTPUITests.xctest */,
+				2887902A2F65BE5D0071178E /* iFTPUnitTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -138,29 +138,6 @@
 			productReference = 28878EBC2F63C1F90071178E /* iFTP.app */;
 			productType = "com.apple.product-type.application";
 		};
-		28878ECA2F63C1FA0071178E /* iFTPTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 28878EE22F63C1FA0071178E /* Build configuration list for PBXNativeTarget "iFTPTests" */;
-			buildPhases = (
-				28878EC72F63C1FA0071178E /* Sources */,
-				28878EC82F63C1FA0071178E /* Frameworks */,
-				28878EC92F63C1FA0071178E /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				28878ECD2F63C1FA0071178E /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				28878ECE2F63C1FA0071178E /* iFTPTests */,
-			);
-			name = iFTPTests;
-			packageProductDependencies = (
-			);
-			productName = iFTPTests;
-			productReference = 28878ECB2F63C1FA0071178E /* iFTPTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 		28878ED42F63C1FA0071178E /* iFTPUITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 28878EE52F63C1FA0071178E /* Build configuration list for PBXNativeTarget "iFTPUITests" */;
@@ -184,6 +161,29 @@
 			productReference = 28878ED52F63C1FA0071178E /* iFTPUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		288790292F65BE5D0071178E /* iFTPUnitTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 288790302F65BE5D0071178E /* Build configuration list for PBXNativeTarget "iFTPUnitTests" */;
+			buildPhases = (
+				288790262F65BE5D0071178E /* Sources */,
+				288790272F65BE5D0071178E /* Frameworks */,
+				288790282F65BE5D0071178E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2887902F2F65BE5D0071178E /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				2887902B2F65BE5D0071178E /* iFTPUnitTests */,
+			);
+			name = iFTPUnitTests;
+			packageProductDependencies = (
+			);
+			productName = iFTPUnitTests;
+			productReference = 2887902A2F65BE5D0071178E /* iFTPUnitTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -197,11 +197,11 @@
 					28878EBB2F63C1F90071178E = {
 						CreatedOnToolsVersion = 26.3;
 					};
-					28878ECA2F63C1FA0071178E = {
+					28878ED42F63C1FA0071178E = {
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = 28878EBB2F63C1F90071178E;
 					};
-					28878ED42F63C1FA0071178E = {
+					288790292F65BE5D0071178E = {
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = 28878EBB2F63C1F90071178E;
 					};
@@ -226,8 +226,8 @@
 			projectRoot = "";
 			targets = (
 				28878EBB2F63C1F90071178E /* iFTP */,
-				28878ECA2F63C1FA0071178E /* iFTPTests */,
 				28878ED42F63C1FA0071178E /* iFTPUITests */,
+				288790292F65BE5D0071178E /* iFTPUnitTests */,
 			);
 		};
 /* End PBXProject section */
@@ -243,14 +243,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		28878EC92F63C1FA0071178E /* Resources */ = {
+		28878ED32F63C1FA0071178E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		28878ED32F63C1FA0071178E /* Resources */ = {
+		288790282F65BE5D0071178E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -267,14 +267,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		28878EC72F63C1FA0071178E /* Sources */ = {
+		28878ED12F63C1FA0071178E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		28878ED12F63C1FA0071178E /* Sources */ = {
+		288790262F65BE5D0071178E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -284,15 +284,15 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		28878ECD2F63C1FA0071178E /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 28878EBB2F63C1F90071178E /* iFTP */;
-			targetProxy = 28878ECC2F63C1FA0071178E /* PBXContainerItemProxy */;
-		};
 		28878ED72F63C1FA0071178E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 28878EBB2F63C1F90071178E /* iFTP */;
 			targetProxy = 28878ED62F63C1FA0071178E /* PBXContainerItemProxy */;
+		};
+		2887902F2F65BE5D0071178E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 28878EBB2F63C1F90071178E /* iFTP */;
+			targetProxy = 2887902E2F65BE5D0071178E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -495,46 +495,6 @@
 			};
 			name = Release;
 		};
-		28878EE32F63C1FA0071178E /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.iFTPTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iFTP.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/iFTP";
-			};
-			name = Debug;
-		};
-		28878EE42F63C1FA0071178E /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.iFTPTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iFTP.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/iFTP";
-			};
-			name = Release;
-		};
 		28878EE62F63C1FA0071178E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -571,6 +531,46 @@
 			};
 			name = Release;
 		};
+		288790312F65BE5D0071178E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.iFTPUnitTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iFTP.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/iFTP";
+			};
+			name = Debug;
+		};
+		288790322F65BE5D0071178E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.iFTPUnitTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iFTP.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/iFTP";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -592,20 +592,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		28878EE22F63C1FA0071178E /* Build configuration list for PBXNativeTarget "iFTPTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				28878EE32F63C1FA0071178E /* Debug */,
-				28878EE42F63C1FA0071178E /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		28878EE52F63C1FA0071178E /* Build configuration list for PBXNativeTarget "iFTPUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				28878EE62F63C1FA0071178E /* Debug */,
 				28878EE72F63C1FA0071178E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		288790302F65BE5D0071178E /* Build configuration list for PBXNativeTarget "iFTPUnitTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				288790312F65BE5D0071178E /* Debug */,
+				288790322F65BE5D0071178E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

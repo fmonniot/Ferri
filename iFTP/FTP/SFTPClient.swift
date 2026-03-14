@@ -38,7 +38,7 @@ actor SFTPClient {
     private var sshChannel: Channel?
     private var sftpChannel: Channel?
     private var protocol_: SFTPProtocol
-    private var isConnectedFlag = false
+    private nonisolated(unsafe) var isConnectedFlag = false
 
     private(set) var currentPath: String = "/"
 
@@ -55,7 +55,7 @@ actor SFTPClient {
         }
     }
 
-    var isConnected: Bool {
+    nonisolated var isConnected: Bool {
         isConnectedFlag
     }
 
@@ -221,94 +221,6 @@ actor SFTPClient {
             offset += UInt64(data.readableBytes)
             progress?(offset, totalSize)
         }
-    }
-
-    func upload(localURL: URL, remotePath: String, progress: ((UInt64, UInt64) -> Void)? = nil) async throws {
-        guard isConnectedFlag else {
-            throw SFTPClientError.notConnected
-        }
-
-        let data = try Data(contentsOf: localURL)
-        let totalSize = UInt64(data.count)
-        
-        let absolutePath = resolvePath(remotePath)
-        let handle = try await openFile(path: absolutePath, flags: 0x00000008 | 0x00000002)
-        defer { Task { try? await closeHandle(handle) } }
-
-        var offset: UInt64 = 0
-        let chunkSize = 32768
-
-        while offset < totalSize {
-            let remaining = Int(totalSize - offset)
-            let thisChunk = min(chunkSize, remaining)
-            let chunk = data.subdata(in: Int(offset)..<(Int(offset) + thisChunk))
-
-            var buffer = ByteBufferAllocator().buffer(capacity: chunk.count)
-            buffer.writeBytes(chunk)
-
-            try await writeToHandle(handle: handle, offset: offset, data: buffer)
-            offset += UInt64(thisChunk)
-            progress?(offset, totalSize)
-        }
-    }
-
-    func createDirectory(named name: String) async throws {
-        guard isConnectedFlag else {
-            throw SFTPClientError.notConnected
-        }
-
-        let absolutePath = resolvePath(name)
-        
-        let request = SFTPMkdirRequest(
-            id: protocol_.nextId(),
-            path: absolutePath,
-            attrs: .empty
-        )
-        _ = try await sendRequest(request)
-    }
-
-    func deleteFile(named name: String) async throws {
-        guard isConnectedFlag else {
-            throw SFTPClientError.notConnected
-        }
-
-        let absolutePath = resolvePath(name)
-        
-        let request = SFTPRemoveRequest(
-            id: protocol_.nextId(),
-            path: absolutePath
-        )
-        _ = try await sendRequest(request)
-    }
-
-    func deleteDirectory(named name: String) async throws {
-        guard isConnectedFlag else {
-            throw SFTPClientError.notConnected
-        }
-
-        let absolutePath = resolvePath(name)
-        
-        let request = SFTPRmdirRequest(
-            id: protocol_.nextId(),
-            path: absolutePath
-        )
-        _ = try await sendRequest(request)
-    }
-
-    func rename(from oldName: String, to newName: String) async throws {
-        guard isConnectedFlag else {
-            throw SFTPClientError.notConnected
-        }
-
-        let oldPath = resolvePath(oldName)
-        let newPath = resolvePath(newName)
-        
-        let request = SFTPRenameRequest(
-            id: protocol_.nextId(),
-            oldPath: oldPath,
-            newPath: newPath
-        )
-        _ = try await sendRequest(request)
     }
 
     private func resolvePath(_ path: String) -> String {

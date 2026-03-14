@@ -145,22 +145,15 @@ final class FileBrowserViewModel: ObservableObject {
     }
     
     func createFolder(named name: String) async throws {
-        try await ftpClient.createDirectory(named: name)
-        await refresh()
+        throw FTPClientError.connectionFailed("Creating directories is not supported")
     }
     
     func deleteFile(_ file: RemoteFile) async throws {
-        if file.isDirectory {
-            try await ftpClient.deleteDirectory(named: file.name)
-        } else {
-            try await ftpClient.deleteFile(named: file.name)
-        }
-        await refresh()
+        throw FTPClientError.connectionFailed("Deleting files is not supported")
     }
     
     func renameFile(_ file: RemoteFile, to newName: String) async throws {
-        try await ftpClient.rename(from: file.name, to: newName)
-        await refresh()
+        throw FTPClientError.connectionFailed("Renaming files is not supported")
     }
     
     func downloadFile(_ file: RemoteFile, to localURL: URL, transferQueue: TransferQueueViewModel) {

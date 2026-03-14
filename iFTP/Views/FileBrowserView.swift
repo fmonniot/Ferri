@@ -268,19 +268,11 @@ struct FileBrowserView: View {
                     remotePath: destinationPath,
                     direction: .upload,
                     fileSize: fileSize,
-                    status: .inProgress
+                    status: .failed
                 )
                 
                 DispatchQueue.main.async {
                     transferQueue.addTransfer(transferItem)
-                    
-                    Task {
-                        do {
-                            try await FTPClient.shared.uploadFile(from: url, to: destinationPath)
-                        } catch {
-                            print("Upload failed: \(error)")
-                        }
-                    }
                 }
             }
         }

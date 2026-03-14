@@ -74,41 +74,10 @@ final class FTPClient: @unchecked Sendable {
         try await changeDirectory(to: "..")
     }
     
-    func createDirectory(named name: String) async throws {
-        print("[FTPClient] createDirectory(named: \(name)) called")
-        guard let client = client else { throw FTPClientError.notConnected }
-        try await client.createDirectory(named: name)
-    }
-    
-    func deleteFile(named name: String) async throws {
-        print("[FTPClient] deleteFile(named: \(name)) called")
-        guard let client = client else { throw FTPClientError.notConnected }
-        try await client.deleteFile(named: name)
-    }
-    
-    func deleteDirectory(named name: String) async throws {
-        print("[FTPClient] deleteDirectory(named: \(name)) called")
-        guard let client = client else { throw FTPClientError.notConnected }
-        try await client.deleteDirectory(named: name)
-    }
-    
-    func rename(from oldName: String, to newName: String) async throws {
-        print("[FTPClient] rename(from: \(oldName), to: \(newName)) called")
-        guard let client = client else { throw FTPClientError.notConnected }
-        try await client.rename(from: oldName, to: newName)
-    }
-    
     func downloadFile(named fileName: String, to localURL: URL) async throws {
         print("[FTPClient] downloadFile(named: \(fileName)) called")
         guard let client = client else { throw FTPClientError.notConnected }
         
         try await client.downloadToFile(remotePath: fileName, localURL: localURL)
-    }
-    
-    func uploadFile(from localURL: URL, to remotePath: String) async throws {
-        print("[FTPClient] uploadFile(from: \(localURL.lastPathComponent)) called")
-        guard let client = client else { throw FTPClientError.notConnected }
-        
-        try await client.upload(localURL: localURL, remotePath: remotePath)
     }
 }

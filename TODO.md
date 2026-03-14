@@ -14,3 +14,6 @@ Known issue:
     - Also add the scope of the project
         - not a full fledge FTP server, only one use for browsing/download.
         - No support for operations that modify remote objects)
+
+
+Run unit tests from the CLI: `xcodebuild test -scheme iFTP -only-testing:iFTPUnitTests/`
