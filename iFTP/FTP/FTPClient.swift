@@ -1,9 +1,6 @@
 import Foundation
-import NIOCore
-import NIOPosix
-import NIOSSL
 
-enum ClientError: Error {
+enum FTPClientError: Error {
     case notConnected
     case connectionFailed(String)
 }
@@ -11,7 +8,7 @@ enum ClientError: Error {
 final class FTPClient: @unchecked Sendable {
     static let shared = FTPClient()
     
-    private var nioClient: FTPClientActor?
+    private var client: FTPSClient?
     private var currentServer: FTPServer?
     
     private(set) var isConnected = false
@@ -20,46 +17,57 @@ final class FTPClient: @unchecked Sendable {
     private init() {}
     
     func connect(to server: FTPServer) async throws {
-        self.currentServer = server
-        
-        let config: FTPServerConfig
-        if server.useTLS {
-            config = FTPServerConfig.explicitTLS(host: server.host, port: UInt16(server.port), pinnedCert: nil)
-        } else {
-            config = FTPServerConfig.plain(host: server.host, port: UInt16(server.port))
+        print("[FTPClient] connect(to:) called for \(server.host):\(server.port)")
+        guard server.useTLS else {
+            throw FTPClientError.connectionFailed("FTPSClient only supports TLS connections. Please enable TLS in the server settings.")
         }
         
-        nioClient = FTPClientActor(config: config)
+        self.currentServer = server
+        print("[FTPClient] Creating FTPSClient for \(server.host)...")
         
-        try await nioClient?.connect()
-        try await nioClient?.login(user: server.username, password: server.password)
+        client = try FTPSClient(host: server.host)
+        
+        print("[FTPClient] Starting connection...")
+        try await client?.connect(user: server.username, password: server.password)
         
         isConnected = true
-        currentPath = try await nioClient?.currentDirectory() ?? "/"
+        print("[FTPClient] Getting current directory...")
+        currentPath = try await client?.currentDirectory() ?? "/"
+        print("[FTPClient] Connected! Current path: \(currentPath)")
     }
     
     func disconnect() {
+        print("[FTPClient] disconnect() called")
         Task {
-            try? await nioClient?.quit()
+            try? await client?.quit()
         }
-        nioClient = nil
+        client = nil
         isConnected = false
         currentPath = "/"
     }
     
     func listDirectory(at path: String = "") async throws -> [RemoteFile] {
-        guard isConnected, let client = nioClient else {
-            throw ClientError.notConnected
+        print("[FTPClient] listDirectory(at: \(path)) called")
+        guard isConnected, let client = client else {
+            print("[FTPClient] Not connected!")
+            throw FTPClientError.notConnected
         }
         
+        print("[FTPClient] Calling client.list()...")
         let lines = try await client.list(path: path)
-        return parseDirectoryListing(lines)
+        print("[FTPClient] Got \(lines.count) lines from server")
+        
+        let files = parseDirectoryListing(lines)
+        print("[FTPClient] Parsed \(files.count) files")
+        return files
     }
     
     func changeDirectory(to path: String) async throws {
-        guard let client = nioClient else { throw ClientError.notConnected }
+        print("[FTPClient] changeDirectory(to: \(path)) called")
+        guard let client = client else { throw FTPClientError.notConnected }
         try await client.changeDirectory(to: path)
         currentPath = try await client.currentDirectory()
+        print("[FTPClient] Changed to: \(currentPath)")
     }
     
     func goToParentDirectory() async throws {
@@ -67,35 +75,40 @@ final class FTPClient: @unchecked Sendable {
     }
     
     func createDirectory(named name: String) async throws {
-        guard let client = nioClient else { throw ClientError.notConnected }
-        _ = try await client.sendCommand("MKD \(name)")
+        print("[FTPClient] createDirectory(named: \(name)) called")
+        guard let client = client else { throw FTPClientError.notConnected }
+        _ = try await client.createDirectory(named: name)
     }
     
     func deleteFile(named name: String) async throws {
-        guard let client = nioClient else { throw ClientError.notConnected }
-        _ = try await client.sendCommand("DELE \(name)")
+        print("[FTPClient] deleteFile(named: \(name)) called")
+        guard let client = client else { throw FTPClientError.notConnected }
+        _ = try await client.deleteFile(named: name)
     }
     
     func deleteDirectory(named name: String) async throws {
-        guard let client = nioClient else { throw ClientError.notConnected }
-        _ = try await client.sendCommand("RMD \(name)")
+        print("[FTPClient] deleteDirectory(named: \(name)) called")
+        guard let client = client else { throw FTPClientError.notConnected }
+        _ = try await client.deleteDirectory(named: name)
     }
     
     func rename(from oldName: String, to newName: String) async throws {
-        guard let client = nioClient else { throw ClientError.notConnected }
-        _ = try await client.sendCommand("RNFR \(oldName)")
-        _ = try await client.sendCommand("RNTO \(newName)")
+        print("[FTPClient] rename(from: \(oldName), to: \(newName)) called")
+        guard let client = client else { throw FTPClientError.notConnected }
+        _ = try await client.rename(from: oldName, to: newName)
     }
     
     func downloadFile(named fileName: String, to localURL: URL) async throws {
-        guard let client = nioClient else { throw ClientError.notConnected }
+        print("[FTPClient] downloadFile(named: \(fileName)) called")
+        guard let client = client else { throw FTPClientError.notConnected }
         
         let data = try await client.download(remotePath: fileName)
         try data.write(to: localURL)
     }
     
     func uploadFile(from localURL: URL, to remotePath: String) async throws {
-        guard let client = nioClient else { throw ClientError.notConnected }
+        print("[FTPClient] uploadFile(from: \(localURL.lastPathComponent)) called")
+        guard let client = client else { throw FTPClientError.notConnected }
         
         let data = try Data(contentsOf: localURL)
         try await client.upload(data: data, remotePath: remotePath)
