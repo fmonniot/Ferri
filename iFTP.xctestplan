@@ -1,0 +1,44 @@
+{
+  "configurations" : [
+    {
+      "id" : "6FD5164C-5094-486D-A487-5BA197B770D5",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "environmentVariableEntries" : [
+      {
+        "key" : "DOCKER_HOST",
+        "value" : "unix:\/\/$HOME\/.docker\/run\/docker.sock"
+      }
+    ],
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:iFTP.xcodeproj",
+      "identifier" : "28878EBB2F63C1F90071178E",
+      "name" : "iFTP"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:iFTP.xcodeproj",
+        "identifier" : "28878ED42F63C1FA0071178E",
+        "name" : "iFTPUITests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:iFTP.xcodeproj",
+        "identifier" : "288790292F65BE5D0071178E",
+        "name" : "iFTPUnitTests"
+      }
+    }
+  ],
+  "version" : 1
+}

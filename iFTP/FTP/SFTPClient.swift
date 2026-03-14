@@ -80,7 +80,7 @@ actor SFTPClient {
         do {
             let bootstrap = ClientBootstrap(group: group)
                 .channelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
-                .channelInitializer { channel in
+                .channelInitializer { [self] channel in
                     channel.pipeline.addHandlers([
                         NIOSSHHandler(
                             role: .client(.init(
@@ -88,7 +88,11 @@ actor SFTPClient {
                                 serverAuthDelegate: serverAuthDelegate
                             )),
                             allocator: channel.allocator,
-                            inboundChildChannelInitializer: nil
+                            inboundChildChannelInitializer: { childChannel, _ in
+                                childChannel.pipeline.addHandler(
+                                    SFTPChannelHandler(client: self, protocol_: self.protocol_)
+                                )
+                            }
                         )
                     ])
                 }
@@ -113,7 +117,27 @@ actor SFTPClient {
     }
 
     private func openSFTPSubsystem(channel: Channel) async throws {
-        self.sftpChannel = channel
+        let sshHandler = try await channel.pipeline.handler(type: NIOSSHHandler.self).get()
+        
+        let subsystemChannel = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Channel, Error>) in
+            let promise = channel.eventLoop.makePromise(of: Channel.self)
+            
+            sshHandler.createChannel(promise) { childChannel, channelType in
+                let future = childChannel.pipeline.addHandler(SFTPChannelHandler(client: self, protocol_: self.protocol_))
+                return future
+            }
+            
+            promise.futureResult.whenComplete { result in
+                switch result {
+                case .success(let ch):
+                    continuation.resume(returning: ch)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+        
+        self.sftpChannel = subsystemChannel
     }
 
     func disconnect() async throws {
@@ -478,5 +502,47 @@ final class AcceptAllHostKeysDelegate: NIOSSHClientServerAuthenticationDelegate 
         validationCompletePromise: EventLoopPromise<Void>
     ) {
         validationCompletePromise.succeed(())
+    }
+}
+
+final class SFTPChannelHandler: ChannelInboundHandler, RemovableChannelHandler {
+    typealias InboundIn = ByteBuffer
+    typealias OutboundOut = ByteBuffer
+    
+    private weak var client: SFTPClient?
+    private let sftpProtocol: SFTPProtocol
+    
+    init(client: SFTPClient, protocol_: SFTPProtocol) {
+        self.client = client
+        self.sftpProtocol = protocol_
+    }
+    
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        var buffer = unwrapInboundIn(data)
+        print("[SFTPChannelHandler] Received \(buffer.readableBytes) bytes")
+        
+        guard let client = client else { return }
+        
+        do {
+            while buffer.readableBytes > 0 {
+                if let (id, response) = try sftpProtocol.decodeResponse(&buffer) {
+                    print("[SFTPChannelHandler] Decoded response for request \(id)")
+                    Task {
+                        await client.handleResponse(response, requestId: id)
+                    }
+                }
+            }
+        } catch {
+            print("[SFTPChannelHandler] Error decoding response: \(error)")
+        }
+    }
+    
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        print("[SFTPChannelHandler] Error: \(error)")
+        context.close(promise: nil)
+    }
+    
+    func channelInactive(context: ChannelHandlerContext) {
+        print("[SFTPChannelHandler] Channel inactive")
     }
 }

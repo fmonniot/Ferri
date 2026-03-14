@@ -41,17 +41,41 @@ struct SFTPClientTests {
     }
     
     static func isDockerAvailable() -> Bool {
+        let path = dockerPath()
+        print(path)
+        
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: dockerPath())
+        process.executableURL = URL(fileURLWithPath: path)
         process.arguments = ["version"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
         
         do {
             try process.run()
             process.waitUntilExit()
-            return process.terminationStatus == 0
+            
+            let success = process.terminationStatus == 0
+            
+            if success {
+                return true
+            } else {
+                let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+
+                let standardOutput = String(data: outputData, encoding: .utf8)
+                let standardError = String(data: errorData, encoding: .utf8)
+                
+                print("status: \(process.terminationStatus)")
+                print("stdout: \(standardOutput ?? "<none>")")
+                print("stderr: \(standardError ?? "<none>")")
+                
+                return false
+            }
         } catch {
+            print(error)
             return false
         }
     }
@@ -144,6 +168,30 @@ struct SFTPClientTests {
         print("[SFTPTest] Server stopped")
     }
     
+    func withTimeout<T>(
+        _ seconds: Double,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                return try await operation()
+            }
+
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                try Task.checkCancellation()
+                throw SFTPTestError.testTimeOut
+            }
+
+            guard let result = try await group.next() else {
+                throw SFTPTestError.testTimeOut
+            }
+            
+            group.cancelAll() // Cancel the other task (the timer)
+            return result
+        }
+    }
+    
     @Test
     func connectWithPassword() async throws {
         guard SFTPClientTests.isDockerAvailable() else {
@@ -155,26 +203,28 @@ struct SFTPClientTests {
             try SFTPClientTests.startServer()
         }
         
-        let client = SFTPClient()
-        
-        try await client.connect(
-            host: "localhost",
-            port: SFTPClientTests.serverPort,
-            credentials: SFTPCredentials(
-                username: SFTPClientTests.serverUsername,
-                password: SFTPClientTests.serverPassword,
-                privateKeyPath: nil,
-                keyPassphrase: nil
+        try await withTimeout(30) {
+            let client = SFTPClient()
+            
+            try await client.connect(
+                host: "localhost",
+                port: SFTPClientTests.serverPort,
+                credentials: SFTPCredentials(
+                    username: SFTPClientTests.serverUsername,
+                    password: SFTPClientTests.serverPassword,
+                    privateKeyPath: nil,
+                    keyPassphrase: nil
+                )
             )
-        )
-        
-        #expect(client.isConnected == true)
-        
-        let files = try await client.listDirectory(path: ".")
-        #expect(!files.isEmpty)
-        
-        try await client.disconnect()
-        #expect(client.isConnected == false)
+            
+            #expect(client.isConnected == true)
+            
+            let files = try await client.listDirectory(path: ".")
+            #expect(!files.isEmpty)
+            
+            try await client.disconnect()
+            #expect(client.isConnected == false)
+        }
     }
 
     @Test
@@ -266,4 +316,5 @@ struct SFTPClientTests {
 enum SFTPTestError: Error {
     case serverStartFailed(String)
     case serverNotRunning
+    case testTimeOut
 }
