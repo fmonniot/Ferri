@@ -12,7 +12,7 @@
 		28878F0D2F63CF280071178E /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 28878F0A2F63CF280071178E /* README.md */; };
 		28878F162F64530F0071178E /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = 28878F152F64530F0071178E /* NIOCore */; };
 		28878F182F64530F0071178E /* NIOPosix in Frameworks */ = {isa = PBXBuildFile; productRef = 28878F172F64530F0071178E /* NIOPosix */; };
-		28878F1B2F6453590071178E /* NIOSSL in Frameworks */ = {isa = PBXBuildFile; productRef = 28878F1A2F6453590071178E /* NIOSSL */; };
+		2887901F2F6535F20071178E /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 2887901E2F6535F20071178E /* NIOSSH */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -66,7 +66,7 @@
 			files = (
 				28878F162F64530F0071178E /* NIOCore in Frameworks */,
 				28878F182F64530F0071178E /* NIOPosix in Frameworks */,
-				28878F1B2F6453590071178E /* NIOSSL in Frameworks */,
+				2887901F2F6535F20071178E /* NIOSSH in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -132,7 +132,7 @@
 			packageProductDependencies = (
 				28878F152F64530F0071178E /* NIOCore */,
 				28878F172F64530F0071178E /* NIOPosix */,
-				28878F1A2F6453590071178E /* NIOSSL */,
+				2887901E2F6535F20071178E /* NIOSSH */,
 			);
 			productName = iFTP;
 			productReference = 28878EBC2F63C1F90071178E /* iFTP.app */;
@@ -218,7 +218,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				28878F142F64530F0071178E /* XCRemoteSwiftPackageReference "swift-nio" */,
-				28878F192F6453580071178E /* XCRemoteSwiftPackageReference "swift-nio-ssl" */,
+				2887901D2F6535F20071178E /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 28878EBD2F63C1F90071178E /* Products */;
@@ -621,12 +621,12 @@
 				minimumVersion = 2.96.0;
 			};
 		};
-		28878F192F6453580071178E /* XCRemoteSwiftPackageReference "swift-nio-ssl" */ = {
+		2887901D2F6535F20071178E /* XCRemoteSwiftPackageReference "swift-nio-ssh" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/apple/swift-nio-ssl.git";
+			repositoryURL = "https://github.com/apple/swift-nio-ssh";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.36.0;
+				minimumVersion = 0.12.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -642,10 +642,10 @@
 			package = 28878F142F64530F0071178E /* XCRemoteSwiftPackageReference "swift-nio" */;
 			productName = NIOPosix;
 		};
-		28878F1A2F6453590071178E /* NIOSSL */ = {
+		2887901E2F6535F20071178E /* NIOSSH */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 28878F192F6453580071178E /* XCRemoteSwiftPackageReference "swift-nio-ssl" */;
-			productName = NIOSSL;
+			package = 2887901D2F6535F20071178E /* XCRemoteSwiftPackageReference "swift-nio-ssh" */;
+			productName = NIOSSH;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

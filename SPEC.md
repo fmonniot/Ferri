@@ -153,8 +153,7 @@ iFTP/
 
 ### 4.4 Supported Protocols
 
-- **Initial**: FTP (plain, not FTPS)
-- **Future**: SFTP, FTPS
+SFTP only
 
 ## 5. System Integration
 
