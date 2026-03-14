@@ -7,6 +7,10 @@
 
 import Foundation
 
+// NOTE: We assume one FTP server per hostname (port is ignored).
+// This simplifies certificate management since FTP over TLS typically
+// uses the same certificate across all ports on a host.
+
 final class TOFUStore {
     private let storageKey = "TOFUCertificateStore"
 
@@ -22,7 +26,8 @@ final class TOFUStore {
     }
 
     func evaluate(fingerprint: String, host: String, port: UInt16) -> Result {
-        let key = "\(host):\(port)"
+        // Port is intentionally ignored - we trust the same certificate for any port on this host
+        let key = host
         if let stored = store[key] {
             return stored == fingerprint ? .trusted : .mismatch(stored: stored, seen: fingerprint)
         }
@@ -32,7 +37,7 @@ final class TOFUStore {
 
     func reset(host: String, port: UInt16) {
         var s = store
-        s.removeValue(forKey: "\(host):\(port)")
+        s.removeValue(forKey: host)
         store = s
     }
 }
