@@ -11,12 +11,12 @@ import Testing
 
 struct SFTPClientTests {
     
-    static var serverPort: Int = 0
-    static var serverUsername = "testuser"
-    static var serverPassword = "testpass123"
-    static var containerName: String = ""
+    static nonisolated(unsafe) var serverPort: Int = 0
+    static nonisolated(unsafe) var serverUsername = "testuser"
+    static nonisolated(unsafe) var serverPassword = "testpass123"
+    static nonisolated(unsafe) var containerName: String = ""
     private static let serverLock = NSLock()
-    private static var _isServerRunning = false
+    private static nonisolated(unsafe) var _isServerRunning = false
     
     static var isServerRunning: Bool {
         serverLock.lock()
@@ -168,7 +168,7 @@ struct SFTPClientTests {
         print("[SFTPTest] Server stopped")
     }
     
-    func withTimeout<T>(
+    func withTimeout<T: Sendable>(
         _ seconds: Double,
         operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
