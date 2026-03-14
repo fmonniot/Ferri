@@ -202,7 +202,8 @@ final class FTPControlChannel {
                             serverHostname: config.host,
                             config: config,
                             tofuStore: tofuStore,
-                            onFirstUse: onFirst
+                            onFirstUse: onFirst,
+                            tlsContext: self.tlsContext
                         )
                         handlers.insert(ssl, at: 0)
                     }
@@ -230,7 +231,7 @@ final class FTPControlChannel {
             config: config,
             tofuStore: tofuStore,
             onFirstUse: onTOFUFirstUse,
-            externalTLSContext: tlsContext
+            tlsContext: tlsContext
         )
 
         do {
@@ -271,7 +272,7 @@ final class FTPDataChannel {
     private let config: FTPServerConfig
     private let tofuStore: TOFUStore
     private let group: MultiThreadedEventLoopGroup
-    private let tlsContext: NIOSSLContext?
+    private let tlsContext: NIOSSLContext
 
     private var channel: (any Channel)?
     private var streamHandler: FTPStreamHandler?
@@ -301,10 +302,7 @@ final class FTPDataChannel {
             pinnedCertificateData: config.pinnedCertificateData
         )
 
-        // Capture tlsContext for session reuse
-        let existingTLSContext = tlsContext
-
-        print("📂 FTPDataChannel: creating bootstrap, TLS: \(dataTLS), session reuse: \(existingTLSContext != nil)")
+        print("📂 FTPDataChannel: creating bootstrap, TLS: \(dataTLS)")
         
         do {
             let sniHost = sniHostname ?? config.host
@@ -318,7 +316,7 @@ final class FTPDataChannel {
                                 config: dataConfig,
                                 tofuStore: tofuStore,
                                 onFirstUse: onFirst,
-                                externalTLSContext: existingTLSContext
+                                tlsContext: self.tlsContext
                             )
                             handlers.insert(ssl, at: 0)
                         }
