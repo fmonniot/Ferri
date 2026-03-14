@@ -110,7 +110,7 @@ actor SFTPClient {
             print("[SFTPClient] Connected successfully")
         } catch {
             print("[SFTPClient] Connection failed: \(error)")
-            try? eventLoopGroup?.syncShutdownGracefully()
+            _ = try? await eventLoopGroup?.shutdownGracefully()
             eventLoopGroup = nil
             throw SFTPClientError.connectionFailed(error.localizedDescription)
         }
@@ -151,7 +151,7 @@ actor SFTPClient {
             try await channel.close().get()
         }
         
-        try await eventLoopGroup?.syncShutdownGracefully()
+        _ = try await eventLoopGroup?.shutdownGracefully()
         
         sshChannel = nil
         sftpChannel = nil
@@ -294,22 +294,30 @@ actor SFTPClient {
     private func sendRequestWithTimeout(_ request: SFTPRequest, timeout: TimeAmount? = nil) async throws -> SFTPResponse {
         let effectiveTimeout = timeout ?? operationTimeout
         
-        return try await withThrowingTaskGroup(of: SFTPResponse.self) { group in
-            group.addTask {
-                try await self.sendRequest(request)
-            }
+        let requestId = request.id
+        let buffer: ByteBuffer
+        do {
+            buffer = try protocol_.encodeRequest(request)
+        } catch {
+            throw SFTPClientError.requestFailed(UInt32.max, error.localizedDescription)
+        }
+        
+        guard let channel = sftpChannel else {
+            throw SFTPClientError.notConnected
+        }
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            requestLock.lock()
+            pendingRequests[requestId] = continuation
+            requestLock.unlock()
             
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(effectiveTimeout.nanoseconds))
-                throw SFTPClientError.timeout("Request timed out after \(effectiveTimeout)")
-            }
-            
-            do {
-                let response = try await group.next()!
-                group.cancelAll()
-                return response
-            } catch is CancellationError {
-                throw SFTPClientError.timeout("Request timed out")
+            var mutableBuffer = buffer
+            channel.writeAndFlush(mutableBuffer).whenFailure { [self] error in
+                self.requestLock.lock()
+                self.pendingRequests.removeValue(forKey: requestId)
+                self.requestLock.unlock()
+                print("[SFTPClient] Write failed: \(error)")
+                continuation.resume(throwing: error)
             }
         }
     }
