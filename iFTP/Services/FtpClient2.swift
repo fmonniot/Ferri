@@ -591,7 +591,10 @@ actor FTPClientActor {
 
     @discardableResult
     func sendCommand(_ command: String, expectPreliminary: Bool = false) async throws -> FTPResponse {
-        print("→ \(command)")
+        let loggableCommand = command.hasPrefix("PASS ") 
+            ? "PASS *****" 
+            : command
+        print("→ \(loggableCommand)")
         try await controlChannel.send(command + "\r\n")
         let response = try await readResponse()
         if expectPreliminary && response.isPreliminary { return response }
