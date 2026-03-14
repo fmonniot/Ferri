@@ -1,13 +1,13 @@
 //
-//  iFTPUITests.swift
-//  iFTPUITests
+//  FerriUITests.swift
+//  FerriUITests
 //
-//  Created by François Monniot on 3/12/26.
+//  Created by François Monniot on 3/14/26.
 //
 
 import XCTest
 
-final class iFTPUITests: XCTestCase {
+final class FerriUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

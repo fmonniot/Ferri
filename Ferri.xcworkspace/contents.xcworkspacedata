@@ -2,9 +2,39 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "group:App.xcodeproj">
+      location = "group:Ferri/Ferri.xcodeproj">
    </FileRef>
    <FileRef
       location = "group:FTPClient">
    </FileRef>
+   <Group
+      location = "group:Old 2"
+      name = "Old 2">
+      <FileRef
+         location = "group:App.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:iFTP.xctestplan">
+      </FileRef>
+      <Group
+         location = "group:iFTPUITests"
+         name = "iFTPUITests">
+         <FileRef
+            location = "group:iFTPUITestsLaunchTests.swift">
+         </FileRef>
+         <FileRef
+            location = "group:iFTPUITests.swift">
+         </FileRef>
+      </Group>
+      <Group
+         location = "group:iFTPUnitTests"
+         name = "iFTPUnitTests">
+         <FileRef
+            location = "group:SFTPClientTests.swift">
+         </FileRef>
+         <FileRef
+            location = "group:ExampleUnitTests.swift">
+         </FileRef>
+      </Group>
+   </Group>
 </Workspace>

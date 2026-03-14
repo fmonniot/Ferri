@@ -7,78 +7,67 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		28878F092F63CF110071178E /* SPEC.md in Resources */ = {isa = PBXBuildFile; fileRef = 28878F082F63CF110071178E /* SPEC.md */; };
-		28878F0C2F63CF280071178E /* TODO.md in Resources */ = {isa = PBXBuildFile; fileRef = 28878F0B2F63CF280071178E /* TODO.md */; };
-		28878F0D2F63CF280071178E /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 28878F0A2F63CF280071178E /* README.md */; };
-		28878F162F64530F0071178E /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = 28878F152F64530F0071178E /* NIOCore */; };
-		28878F182F64530F0071178E /* NIOPosix in Frameworks */ = {isa = PBXBuildFile; productRef = 28878F172F64530F0071178E /* NIOPosix */; };
-		2887901F2F6535F20071178E /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 2887901E2F6535F20071178E /* NIOSSH */; };
+		288791632F65E3FA0071178E /* FTPClient in Frameworks */ = {isa = PBXBuildFile; productRef = 288791622F65E3FA0071178E /* FTPClient */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		28878ED62F63C1FA0071178E /* PBXContainerItemProxy */ = {
+		288790B62F65DF720071178E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 28878EB42F63C1F90071178E /* Project object */;
+			containerPortal = 2887909E2F65DF710071178E /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 28878EBB2F63C1F90071178E;
-			remoteInfo = iFTP;
+			remoteGlobalIDString = 288790A52F65DF710071178E;
+			remoteInfo = Ferri;
 		};
-		2887902E2F65BE5D0071178E /* PBXContainerItemProxy */ = {
+		288790C02F65DF720071178E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 28878EB42F63C1F90071178E /* Project object */;
+			containerPortal = 2887909E2F65DF710071178E /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 28878EBB2F63C1F90071178E;
-			remoteInfo = iFTP;
+			remoteGlobalIDString = 288790A52F65DF710071178E;
+			remoteInfo = Ferri;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		28878EBC2F63C1F90071178E /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		28878ED52F63C1FA0071178E /* AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		28878F082F63CF110071178E /* SPEC.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = SPEC.md; sourceTree = "<group>"; };
-		28878F0A2F63CF280071178E /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
-		28878F0B2F63CF280071178E /* TODO.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = TODO.md; sourceTree = "<group>"; };
-		2887902A2F65BE5D0071178E /* AppUnitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppUnitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		288790682F65D83B0071178E /* iFTP.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = iFTP.xctestplan; sourceTree = "<group>"; };
+		288790A62F65DF710071178E /* Ferri.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ferri.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		288790B52F65DF720071178E /* FerriTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FerriTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		288790BF2F65DF720071178E /* FerriUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FerriUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		28878EBE2F63C1F90071178E /* iFTP */ = {
+		288790A82F65DF710071178E /* Ferri */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = iFTP;
+			path = Ferri;
 			sourceTree = "<group>";
 		};
-		28878ED82F63C1FA0071178E /* iFTPUITests */ = {
+		288790B82F65DF720071178E /* FerriTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = iFTPUITests;
+			path = FerriTests;
 			sourceTree = "<group>";
 		};
-		2887902B2F65BE5D0071178E /* iFTPUnitTests */ = {
+		288790C22F65DF720071178E /* FerriUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = iFTPUnitTests;
+			path = FerriUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		28878EB92F63C1F90071178E /* Frameworks */ = {
+		288790A32F65DF710071178E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				28878F162F64530F0071178E /* NIOCore in Frameworks */,
-				28878F182F64530F0071178E /* NIOPosix in Frameworks */,
-				2887901F2F6535F20071178E /* NIOSSH in Frameworks */,
+				288791632F65E3FA0071178E /* FTPClient in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		28878ED22F63C1FA0071178E /* Frameworks */ = {
+		288790B22F65DF720071178E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		288790272F65BE5D0071178E /* Frameworks */ = {
+		288790BC2F65DF720071178E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -88,171 +77,166 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		28878EB32F63C1F90071178E = {
+		2887909D2F65DF710071178E = {
 			isa = PBXGroup;
 			children = (
-				28878EBD2F63C1F90071178E /* Products */,
-				288790682F65D83B0071178E /* iFTP.xctestplan */,
-				28878F082F63CF110071178E /* SPEC.md */,
-				28878F0A2F63CF280071178E /* README.md */,
-				28878F0B2F63CF280071178E /* TODO.md */,
-				28878EBE2F63C1F90071178E /* iFTP */,
-				28878ED82F63C1FA0071178E /* iFTPUITests */,
-				2887902B2F65BE5D0071178E /* iFTPUnitTests */,
+				288790A82F65DF710071178E /* Ferri */,
+				288790B82F65DF720071178E /* FerriTests */,
+				288790C22F65DF720071178E /* FerriUITests */,
+				288791612F65E3FA0071178E /* Frameworks */,
+				288790A72F65DF710071178E /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		28878EBD2F63C1F90071178E /* Products */ = {
+		288790A72F65DF710071178E /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				28878EBC2F63C1F90071178E /* App.app */,
-				28878ED52F63C1FA0071178E /* AppUITests.xctest */,
-				2887902A2F65BE5D0071178E /* AppUnitTests.xctest */,
+				288790A62F65DF710071178E /* Ferri.app */,
+				288790B52F65DF720071178E /* FerriTests.xctest */,
+				288790BF2F65DF720071178E /* FerriUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		288791612F65E3FA0071178E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		28878EBB2F63C1F90071178E /* App */ = {
+		288790A52F65DF710071178E /* Ferri */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 28878EDF2F63C1FA0071178E /* Build configuration list for PBXNativeTarget "App" */;
+			buildConfigurationList = 288790C92F65DF720071178E /* Build configuration list for PBXNativeTarget "Ferri" */;
 			buildPhases = (
-				28878EB82F63C1F90071178E /* Sources */,
-				28878EB92F63C1F90071178E /* Frameworks */,
-				28878EBA2F63C1F90071178E /* Resources */,
+				288790A22F65DF710071178E /* Sources */,
+				288790A32F65DF710071178E /* Frameworks */,
+				288790A42F65DF710071178E /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				28878EBE2F63C1F90071178E /* iFTP */,
+				288790A82F65DF710071178E /* Ferri */,
 			);
-			name = App;
+			name = Ferri;
 			packageProductDependencies = (
-				28878F152F64530F0071178E /* NIOCore */,
-				28878F172F64530F0071178E /* NIOPosix */,
-				2887901E2F6535F20071178E /* NIOSSH */,
+				288791622F65E3FA0071178E /* FTPClient */,
 			);
-			productName = iFTP;
-			productReference = 28878EBC2F63C1F90071178E /* App.app */;
+			productName = Ferri;
+			productReference = 288790A62F65DF710071178E /* Ferri.app */;
 			productType = "com.apple.product-type.application";
 		};
-		28878ED42F63C1FA0071178E /* AppUITests */ = {
+		288790B42F65DF720071178E /* FerriTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 28878EE52F63C1FA0071178E /* Build configuration list for PBXNativeTarget "AppUITests" */;
+			buildConfigurationList = 288790CC2F65DF720071178E /* Build configuration list for PBXNativeTarget "FerriTests" */;
 			buildPhases = (
-				28878ED12F63C1FA0071178E /* Sources */,
-				28878ED22F63C1FA0071178E /* Frameworks */,
-				28878ED32F63C1FA0071178E /* Resources */,
+				288790B12F65DF720071178E /* Sources */,
+				288790B22F65DF720071178E /* Frameworks */,
+				288790B32F65DF720071178E /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				28878ED72F63C1FA0071178E /* PBXTargetDependency */,
+				288790B72F65DF720071178E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				28878ED82F63C1FA0071178E /* iFTPUITests */,
+				288790B82F65DF720071178E /* FerriTests */,
 			);
-			name = AppUITests;
+			name = FerriTests;
 			packageProductDependencies = (
 			);
-			productName = iFTPUITests;
-			productReference = 28878ED52F63C1FA0071178E /* AppUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
-		288790292F65BE5D0071178E /* AppUnitTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 288790302F65BE5D0071178E /* Build configuration list for PBXNativeTarget "AppUnitTests" */;
-			buildPhases = (
-				288790262F65BE5D0071178E /* Sources */,
-				288790272F65BE5D0071178E /* Frameworks */,
-				288790282F65BE5D0071178E /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				2887902F2F65BE5D0071178E /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				2887902B2F65BE5D0071178E /* iFTPUnitTests */,
-			);
-			name = AppUnitTests;
-			packageProductDependencies = (
-			);
-			productName = iFTPUnitTests;
-			productReference = 2887902A2F65BE5D0071178E /* AppUnitTests.xctest */;
+			productName = FerriTests;
+			productReference = 288790B52F65DF720071178E /* FerriTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		288790BE2F65DF720071178E /* FerriUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 288790CF2F65DF720071178E /* Build configuration list for PBXNativeTarget "FerriUITests" */;
+			buildPhases = (
+				288790BB2F65DF720071178E /* Sources */,
+				288790BC2F65DF720071178E /* Frameworks */,
+				288790BD2F65DF720071178E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				288790C12F65DF720071178E /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				288790C22F65DF720071178E /* FerriUITests */,
+			);
+			name = FerriUITests;
+			packageProductDependencies = (
+			);
+			productName = FerriUITests;
+			productReference = 288790BF2F65DF720071178E /* FerriUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		28878EB42F63C1F90071178E /* Project object */ = {
+		2887909E2F65DF710071178E /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
-					28878EBB2F63C1F90071178E = {
+					288790A52F65DF710071178E = {
 						CreatedOnToolsVersion = 26.3;
 					};
-					28878ED42F63C1FA0071178E = {
+					288790B42F65DF720071178E = {
 						CreatedOnToolsVersion = 26.3;
-						TestTargetID = 28878EBB2F63C1F90071178E;
+						TestTargetID = 288790A52F65DF710071178E;
 					};
-					288790292F65BE5D0071178E = {
+					288790BE2F65DF720071178E = {
 						CreatedOnToolsVersion = 26.3;
-						TestTargetID = 28878EBB2F63C1F90071178E;
+						TestTargetID = 288790A52F65DF710071178E;
 					};
 				};
 			};
-			buildConfigurationList = 28878EB72F63C1F90071178E /* Build configuration list for PBXProject "App" */;
+			buildConfigurationList = 288790A12F65DF710071178E /* Build configuration list for PBXProject "Ferri" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
 			);
-			mainGroup = 28878EB32F63C1F90071178E;
+			mainGroup = 2887909D2F65DF710071178E;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				28878F142F64530F0071178E /* XCRemoteSwiftPackageReference "swift-nio" */,
-				2887901D2F6535F20071178E /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
-			);
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 28878EBD2F63C1F90071178E /* Products */;
+			productRefGroup = 288790A72F65DF710071178E /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				28878EBB2F63C1F90071178E /* App */,
-				28878ED42F63C1FA0071178E /* AppUITests */,
-				288790292F65BE5D0071178E /* AppUnitTests */,
+				288790A52F65DF710071178E /* Ferri */,
+				288790B42F65DF720071178E /* FerriTests */,
+				288790BE2F65DF720071178E /* FerriUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		28878EBA2F63C1F90071178E /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				28878F0C2F63CF280071178E /* TODO.md in Resources */,
-				28878F0D2F63CF280071178E /* README.md in Resources */,
-				28878F092F63CF110071178E /* SPEC.md in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		28878ED32F63C1FA0071178E /* Resources */ = {
+		288790A42F65DF710071178E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		288790282F65BE5D0071178E /* Resources */ = {
+		288790B32F65DF720071178E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		288790BD2F65DF720071178E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -262,21 +246,21 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		28878EB82F63C1F90071178E /* Sources */ = {
+		288790A22F65DF710071178E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		28878ED12F63C1FA0071178E /* Sources */ = {
+		288790B12F65DF720071178E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		288790262F65BE5D0071178E /* Sources */ = {
+		288790BB2F65DF720071178E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -286,20 +270,20 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		28878ED72F63C1FA0071178E /* PBXTargetDependency */ = {
+		288790B72F65DF720071178E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 28878EBB2F63C1F90071178E /* App */;
-			targetProxy = 28878ED62F63C1FA0071178E /* PBXContainerItemProxy */;
+			target = 288790A52F65DF710071178E /* Ferri */;
+			targetProxy = 288790B62F65DF720071178E /* PBXContainerItemProxy */;
 		};
-		2887902F2F65BE5D0071178E /* PBXTargetDependency */ = {
+		288790C12F65DF720071178E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 28878EBB2F63C1F90071178E /* App */;
-			targetProxy = 2887902E2F65BE5D0071178E /* PBXContainerItemProxy */;
+			target = 288790A52F65DF710071178E /* Ferri */;
+			targetProxy = 288790C02F65DF720071178E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		28878EDD2F63C1FA0071178E /* Debug */ = {
+		288790C72F65DF720071178E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -362,7 +346,7 @@
 			};
 			name = Debug;
 		};
-		28878EDE2F63C1FA0071178E /* Release */ = {
+		288790C82F65DF720071178E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -417,7 +401,7 @@
 			};
 			name = Release;
 		};
-		28878EE02F63C1FA0071178E /* Debug */ = {
+		288790CA2F65DF720071178E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -426,17 +410,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
-				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
-				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -445,7 +419,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.iFTP;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.Ferri;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -457,7 +431,7 @@
 			};
 			name = Debug;
 		};
-		28878EE12F63C1FA0071178E /* Release */ = {
+		288790CB2F65DF720071178E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -466,17 +440,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
-				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
-				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -485,7 +449,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.iFTP;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.Ferri;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -497,159 +461,129 @@
 			};
 			name = Release;
 		};
-		28878EE62F63C1FA0071178E /* Debug */ = {
+		288790CD2F65DF720071178E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.iFTPUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.FerriTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = iFTP;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ferri.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ferri";
 			};
 			name = Debug;
 		};
-		28878EE72F63C1FA0071178E /* Release */ = {
+		288790CE2F65DF720071178E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.iFTPUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.FerriTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = iFTP;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ferri.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ferri";
 			};
 			name = Release;
 		};
-		288790312F65BE5D0071178E /* Debug */ = {
+		288790D02F65DF720071178E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.iFTPUnitTests;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.FerriUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/App";
+				TEST_TARGET_NAME = Ferri;
 			};
 			name = Debug;
 		};
-		288790322F65BE5D0071178E /* Release */ = {
+		288790D12F65DF720071178E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.iFTPUnitTests;
+				PRODUCT_BUNDLE_IDENTIFIER = eu.monniot.FerriUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/App";
+				TEST_TARGET_NAME = Ferri;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		28878EB72F63C1F90071178E /* Build configuration list for PBXProject "App" */ = {
+		288790A12F65DF710071178E /* Build configuration list for PBXProject "Ferri" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				28878EDD2F63C1FA0071178E /* Debug */,
-				28878EDE2F63C1FA0071178E /* Release */,
+				288790C72F65DF720071178E /* Debug */,
+				288790C82F65DF720071178E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		28878EDF2F63C1FA0071178E /* Build configuration list for PBXNativeTarget "App" */ = {
+		288790C92F65DF720071178E /* Build configuration list for PBXNativeTarget "Ferri" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				28878EE02F63C1FA0071178E /* Debug */,
-				28878EE12F63C1FA0071178E /* Release */,
+				288790CA2F65DF720071178E /* Debug */,
+				288790CB2F65DF720071178E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		28878EE52F63C1FA0071178E /* Build configuration list for PBXNativeTarget "AppUITests" */ = {
+		288790CC2F65DF720071178E /* Build configuration list for PBXNativeTarget "FerriTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				28878EE62F63C1FA0071178E /* Debug */,
-				28878EE72F63C1FA0071178E /* Release */,
+				288790CD2F65DF720071178E /* Debug */,
+				288790CE2F65DF720071178E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		288790302F65BE5D0071178E /* Build configuration list for PBXNativeTarget "AppUnitTests" */ = {
+		288790CF2F65DF720071178E /* Build configuration list for PBXNativeTarget "FerriUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				288790312F65BE5D0071178E /* Debug */,
-				288790322F65BE5D0071178E /* Release */,
+				288790D02F65DF720071178E /* Debug */,
+				288790D12F65DF720071178E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		28878F142F64530F0071178E /* XCRemoteSwiftPackageReference "swift-nio" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/apple/swift-nio.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.96.0;
-			};
-		};
-		2887901D2F6535F20071178E /* XCRemoteSwiftPackageReference "swift-nio-ssh" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/apple/swift-nio-ssh";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.12.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
-		28878F152F64530F0071178E /* NIOCore */ = {
+		288791622F65E3FA0071178E /* FTPClient */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 28878F142F64530F0071178E /* XCRemoteSwiftPackageReference "swift-nio" */;
-			productName = NIOCore;
-		};
-		28878F172F64530F0071178E /* NIOPosix */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 28878F142F64530F0071178E /* XCRemoteSwiftPackageReference "swift-nio" */;
-			productName = NIOPosix;
-		};
-		2887901E2F6535F20071178E /* NIOSSH */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 2887901D2F6535F20071178E /* XCRemoteSwiftPackageReference "swift-nio-ssh" */;
-			productName = NIOSSH;
+			productName = FTPClient;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
-	rootObject = 28878EB42F63C1F90071178E /* Project object */;
+	rootObject = 2887909E2F65DF710071178E /* Project object */;
 }

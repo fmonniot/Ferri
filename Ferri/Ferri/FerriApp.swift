@@ -1,7 +1,15 @@
+//
+//  FerriApp.swift
+//  Ferri
+//
+//  Created by François Monniot on 3/14/26.
+//
+
 import SwiftUI
+import SwiftData
 
 @main
-struct iFTPApp: App {
+struct FerriApp: App {
     var body: some Scene {
         WindowGroup {
             MainView()
