@@ -81,7 +81,9 @@ actor SFTPClient {
             let bootstrap = ClientBootstrap(group: group)
                 .channelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
                 .channelInitializer { [self] channel in
-                    channel.pipeline.addHandlers([
+                    let loggingHandler = LoggingChannelHandler()
+                    return channel.pipeline.addHandlers([
+                        loggingHandler,
                         NIOSSHHandler(
                             role: .client(.init(
                                 userAuthDelegate: userAuthDelegate,
@@ -552,5 +554,31 @@ final class SFTPChannelHandler: ChannelInboundHandler, RemovableChannelHandler {
     
     func channelInactive(context: ChannelHandlerContext) {
         print("[SFTPChannelHandler] Channel inactive")
+    }
+}
+
+final class LoggingChannelHandler: ChannelInboundHandler, RemovableChannelHandler {
+    typealias InboundIn = ByteBuffer
+    
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        var buffer = unwrapInboundIn(data)
+        let bytes = buffer.readableBytes
+        print("[LoggingChannelHandler] IN: \(bytes) bytes")
+        context.fireChannelRead(data)
+    }
+    
+    func channelActive(context: ChannelHandlerContext) {
+        print("[LoggingChannelHandler] Channel active")
+        context.fireChannelActive()
+    }
+    
+    func channelInactive(context: ChannelHandlerContext) {
+        print("[LoggingChannelHandler] Channel inactive")
+        context.fireChannelInactive()
+    }
+    
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        print("[LoggingChannelHandler] Error: \(error)")
+        context.fireErrorCaught(error)
     }
 }
