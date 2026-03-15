@@ -1,4 +1,5 @@
 import SwiftUI
+import FTPClient
 
 struct SidebarView: View {
     @ObservedObject var viewModel: ConnectionListViewModel

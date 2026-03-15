@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import FTPClient
 
 struct FileBrowserView: View {
     @ObservedObject var viewModel: FileBrowserViewModel

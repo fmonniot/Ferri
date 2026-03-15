@@ -1,4 +1,5 @@
 import SwiftUI
+import FTPClient
 
 struct MainView: View {
     @StateObject private var connectionViewModel = ConnectionListViewModel()

@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import FTPClient
 
 enum SortOrder {
     case ascending

@@ -1,4 +1,5 @@
 import SwiftUI
+import FTPClient
 
 struct ConnectionSheet: View {
     @Environment(\.dismiss) private var dismiss

@@ -1,4 +1,5 @@
 import Foundation
+import FTPClient
 
 final class ConnectionStorage {
     static let shared = ConnectionStorage()

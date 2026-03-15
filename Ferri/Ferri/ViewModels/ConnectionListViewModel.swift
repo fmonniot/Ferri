@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import FTPClient
 
 enum ConnectionStatus {
     case disconnected
