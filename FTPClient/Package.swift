@@ -37,7 +37,10 @@ let package = Package(
         ),
         .testTarget(
             name: "FTPClientTests",
-            dependencies: ["FTPClient"]
+            dependencies: [
+                "FTPClient",
+                .product(name: "NIOCore", package: "swift-nio"),
+            ]
         ),
     ]
 )

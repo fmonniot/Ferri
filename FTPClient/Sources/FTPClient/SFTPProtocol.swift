@@ -33,7 +33,7 @@ enum SFTPMessageType: UInt8 {
     case attrs = 105
 }
 
-enum SFTPError: Error, CustomStringConvertible {
+enum SFTPError: Error, CustomStringConvertible, Sendable {
     case invalidMessage
     case invalidHandle
     case encodingFailed(String)
@@ -63,7 +63,7 @@ enum SFTPError: Error, CustomStringConvertible {
     }
 }
 
-struct SFTPFileAttributes: Hashable {
+struct SFTPFileAttributes: Hashable, Sendable {
     var size: UInt64?
     var permissions: UInt32?
     var uid: UInt32?
@@ -77,7 +77,7 @@ struct SFTPFileAttributes: Hashable {
     static let empty = SFTPFileAttributes()
 }
 
-struct SFTPDirectoryEntry {
+struct SFTPDirectoryEntry: Sendable {
     let filename: String
     let longname: String
     var attributes: SFTPFileAttributes
@@ -86,7 +86,7 @@ struct SFTPDirectoryEntry {
     var isSymlink: Bool { attributes.isSymlink }
 }
 
-struct SFTPHandle {
+struct SFTPHandle: Sendable {
     let bytes: ByteBuffer
 
     var string: String {
@@ -95,7 +95,7 @@ struct SFTPHandle {
     }
 }
 
-enum SFTPResponse {
+enum SFTPResponse: Sendable {
     case version(version: UInt32, extensionData: [(String, String)])
     case status(id: UInt32, code: UInt32, message: String, language: String)
     case handle(id: UInt32, handle: SFTPHandle)
@@ -234,7 +234,7 @@ struct SFTPSymlinkRequest: SFTPRequest {
     let type: SFTPMessageType = .symlink
 }
 
-final class SFTPProtocol {
+final class SFTPProtocol: @unchecked Sendable {
     private var nextRequestId: UInt32 = 1
 
     func nextId() -> UInt32 {
@@ -289,6 +289,7 @@ final class SFTPProtocol {
             payloadBuffer.writeInteger(req.id, as: UInt32.self)
             try writeHandle(&payloadBuffer, req.handle)
             payloadBuffer.writeInteger(req.offset, as: UInt64.self)
+            payloadBuffer.writeInteger(UInt32(req.data.readableBytes), as: UInt32.self)
             var data = req.data
             payloadBuffer.writeBuffer(&data)
 

@@ -1,15 +1,15 @@
 import Foundation
 
-struct RemoteFile: Identifiable, Hashable {
-    let id: UUID
-    let name: String
-    let path: String
-    let isDirectory: Bool
-    let size: Int64
-    let modificationDate: Date?
-    let permissions: String
-    
-    init(
+public struct RemoteFile: Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let path: String
+    public let isDirectory: Bool
+    public let size: Int64
+    public let modificationDate: Date?
+    public let permissions: String
+
+    public init(
         id: UUID = UUID(),
         name: String,
         path: String,
@@ -27,17 +27,17 @@ struct RemoteFile: Identifiable, Hashable {
         self.permissions = permissions
     }
     
-    var formattedSize: String {
+    public var formattedSize: String {
         guard !isDirectory else { return "--" }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
     
-    var formattedDate: String {
+    public var formattedDate: String {
         guard let date = modificationDate else { return "--" }
         return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
     }
     
-    var icon: String {
+    public var icon: String {
         if isDirectory {
             return "folder.fill"
         } else {
