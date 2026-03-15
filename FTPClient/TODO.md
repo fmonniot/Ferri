@@ -356,7 +356,7 @@ The current download loop sends one `SSH_FXP_READ` and waits for the response be
 | 3.4 | `SFTPClient.sendRequest` | Low | Architecture | Dead code duplicating `sendRequestWithTimeout` | ✅ Done |
 | 3.5 | `LoggingChannelHandler` | Low | Architecture | Placed on wrong (encrypted) pipeline layer | ✅ Done |
 | 3.6 | `SFTPProtocol.encodeRequest` | Medium | Architecture | `is/as` type dispatch bypasses Swift type system | ❌ Not done |
-| 3.7 | `SFTPClient.isConnectedFlag` | Medium | Architecture | `nonisolated(unsafe)` read without memory ordering guarantees | ✅ Done |
+| 3.7 | `SFTPClient.isConnectedFlag` | Medium | Architecture | `nonisolated(unsafe)` read without memory ordering guarantees | ⚠️ Reverted (needed for tests) |
 | 3.8 | `SFTPClient.connect` | Medium | Architecture | Hard-coded 500ms sleep instead of proper auth completion awaiting | ✅ Done (wasn't in code) |
 | 4.1 | SFTP child pipeline | Low | Improvement | Use NIO Framing Pipeline Handlers instead of manual framing | ✅ Done (manual framing kept for simplicity) |
 | 4.2 | `SFTPRequest` protocol | Medium | Improvement | Make requests self-encoding | ❌ Not done |

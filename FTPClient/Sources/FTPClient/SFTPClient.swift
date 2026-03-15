@@ -43,7 +43,7 @@ actor SFTPClient {
     private var sshChannel: Channel?
     private var sftpChannel: Channel?
     private var protocol_: SFTPProtocol
-    private var isConnectedFlag = false
+    private nonisolated(unsafe) var isConnectedFlag = false
 
     private(set) var currentPath: String = "/"
 
@@ -61,7 +61,7 @@ actor SFTPClient {
         }
     }
 
-    var isConnected: Bool {
+    nonisolated var isConnected: Bool {
         isConnectedFlag
     }
 
