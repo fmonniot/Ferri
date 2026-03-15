@@ -18,7 +18,8 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio", from: "2.0.0"),
         .package(url: "https://github.com/apple/swift-nio-ssh", from: "0.12.0"),
-        .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0")
+        .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0"),
+        .package(url: "https://github.com/apple/swift-log", from: "1.0.0")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -31,6 +32,7 @@ let package = Package(
                 .product(name: "NIOPosix",       package: "swift-nio"),
                 .product(name: "NIOSSH",         package: "swift-nio-ssh"),
                 .product(name: "Crypto",         package: "swift-crypto"),
+                .product(name: "Logging",        package: "swift-log"),
             ]
         ),
         .testTarget(

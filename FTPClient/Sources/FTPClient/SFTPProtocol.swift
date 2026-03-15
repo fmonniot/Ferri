@@ -1,6 +1,9 @@
 import Foundation
 import NIOCore
 import NIO
+import Logging
+
+private let logger = Logger(label: "com.ftpclient.sftp.protocol")
 
 enum SFTPMessageType: UInt8 {
     case initVersion = 1
@@ -243,19 +246,19 @@ final class SFTPProtocol {
     func encodeRequest(_ request: SFTPRequest) throws -> ByteBuffer {
         var payloadBuffer = ByteBufferAllocator().buffer(capacity: 256)
         
-        print("[SFTPProtocol] Encoding \(request.type) request id=\(request.id)")
+        logger.debug("Encoding \(request.type) request id=\(request.id)")
         
         switch request {
         case let req as SFTPInitRequest:
             payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
             payloadBuffer.writeInteger(req.version, as: UInt32.self)
-            print("[SFTPProtocol]   version = \(req.version)")
+            logger.debug("  version = \(req.version)")
 
         case let req as SFTPOpendirRequest:
             payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
             payloadBuffer.writeInteger(req.id, as: UInt32.self)
             try writeString(&payloadBuffer, req.path)
-            print("[SFTPProtocol]   path = \(req.path)")
+            logger.debug("  path = \(req.path)")
 
         case let req as SFTPReaddirRequest:
             payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
@@ -379,18 +382,18 @@ final class SFTPProtocol {
         }
         
         guard let messageType = SFTPMessageType(rawValue: typeByte) else {
-            print("[SFTPProtocol] Unknown message type: \(typeByte)")
+            logger.warning("Unknown message type: \(typeByte)")
             throw SFTPError.decodingFailed("Unknown message type: \(typeByte)")
         }
 
-        print("[SFTPProtocol] Decoding \(messageType) response")
+        logger.debug("Decoding \(messageType) response")
 
         switch messageType {
         case .version:
             guard let version = buffer.readInteger(as: UInt32.self) else {
                 throw SFTPError.decodingFailed("Missing version")
             }
-            print("[SFTPProtocol]   version = \(version)")
+            logger.debug("  version = \(version)")
             var extensionData: [(String, String)] = []
             while buffer.readableBytes > 0 {
                 if let name = readString(&buffer), let value = readString(&buffer) {

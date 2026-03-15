@@ -3,6 +3,9 @@ import NIOCore
 import NIOPosix
 import NIOSSH
 import Crypto
+import Logging
+
+private let logger = Logger(label: "com.ftpclient.sftp")
 
 enum SFTPClientError: Error, CustomStringConvertible {
     case connectionFailed(String)
@@ -65,7 +68,7 @@ actor SFTPClient {
     func connect(host: String, port: Int, credentials: SFTPCredentials) async throws {
         guard !isConnectedFlag else { return }
 
-        print("[SFTPClient] Connecting to \(host):\(port) with user '\(credentials.username)'")
+        logger.info("Connecting to \(host):\(port) with user '\(credentials.username)'")
 
         eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 2)
 
@@ -98,17 +101,17 @@ actor SFTPClient {
                 .connectTimeout(.seconds(30))
 
             let connectedChannel = try await bootstrap.connect(host: host, port: port).get()
-            print("[SFTPClient] TCP connection established")
+            logger.info("TCP connection established")
             self.sshChannel = connectedChannel
 
             try await openSFTPSubsystem(channel: connectedChannel)
-            print("[SFTPClient] SFTP subsystem opened")
+            logger.info("SFTP subsystem opened")
 
             isConnectedFlag = true
             currentPath = "/"
-            print("[SFTPClient] Connected successfully")
+            logger.info("Connected successfully")
         } catch {
-            print("[SFTPClient] Connection failed: \(error)")
+            logger.error("Connection failed: \(error)")
             _ = try? await eventLoopGroup?.shutdownGracefully()
             eventLoopGroup = nil
             throw SFTPClientError.connectionFailed(error.localizedDescription)
@@ -155,7 +158,7 @@ actor SFTPClient {
             guard version == 3 else {
                 throw SFTPClientError.subsystemOpenFailed("Unsupported SFTP version: \(version)")
             }
-            print("[SFTPClient] SFTP version \(version) negotiated")
+            logger.info("SFTP version \(version) negotiated")
         } else {
             throw SFTPClientError.subsystemOpenFailed("Invalid version response")
         }
@@ -331,14 +334,14 @@ actor SFTPClient {
                 self.timeoutTask?.cancel()
                 self.timeoutTask = nil
                 self.pendingRequests.removeValue(forKey: requestId)
-                print("[SFTPClient] Write failed: \(error)")
+                        logger.error("Write failed: \(error)")
                 continuation.resume(throwing: error)
             }
         }
     }
 
     func handleResponse(_ response: SFTPResponse, requestId: UInt32) {
-        print("[SFTPClient] Received response for request \(requestId)")
+        logger.debug("Received response for request \(requestId)")
         timeoutTask?.cancel()
         timeoutTask = nil
         let continuation = pendingRequests.removeValue(forKey: requestId)
@@ -622,7 +625,7 @@ final class SFTPChannelHandler: ChannelInboundHandler, RemovableChannelHandler {
     
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         var buffer = unwrapInboundIn(data)
-        print("[SFTPChannelHandler] Received \(buffer.readableBytes) bytes")
+        logger.debug("Received \(buffer.readableBytes) bytes")
         
         guard let client = client else { return }
         
@@ -631,29 +634,29 @@ final class SFTPChannelHandler: ChannelInboundHandler, RemovableChannelHandler {
                 guard let (id, response) = try sftpProtocol.decodeResponse(&buffer) else {
                     break
                 }
-                print("[SFTPChannelHandler] Decoded response for request \(id)")
+                logger.debug("Decoded response for request \(id)")
                 Task {
                     await client.handleResponse(response, requestId: id)
                 }
             }
         } catch {
-            print("[SFTPChannelHandler] Error decoding response: \(error)")
+            logger.error("Error decoding response: \(error)")
         }
     }
     
     func errorCaught(context: ChannelHandlerContext, error: Error) {
-        print("[SFTPChannelHandler] Error: \(error)")
+        logger.error("Error: \(error)")
         context.close(promise: nil)
     }
     
     
     func channelActive(context: ChannelHandlerContext) {
-        print("[SFTPChannelHandler] Channel active")
+        logger.debug("Channel active")
         context.fireChannelActive()
     }
 
     func channelInactive(context: ChannelHandlerContext) {
-        print("[SFTPChannelHandler] Channel inactive")
+        logger.debug("Channel inactive")
         context.fireChannelInactive()
     }
 }
