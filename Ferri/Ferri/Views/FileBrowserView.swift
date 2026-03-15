@@ -33,12 +33,12 @@ struct FileBrowserView: View {
         .navigationTitle(viewModel.currentPath)
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
-                Button(action: { Task { await viewModel.goBack() } }) {
+                Button(action: { viewModel.goBack() }) {
                     Image(systemName: "chevron.left")
                 }
                 .disabled(!viewModel.canGoBack)
                 
-                Button(action: { Task { await viewModel.goForward() } }) {
+                Button(action: { viewModel.goForward() }) {
                     Image(systemName: "chevron.right")
                 }
                 .disabled(!viewModel.canGoForward)
@@ -242,6 +242,7 @@ struct FileBrowserView: View {
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         guard isConnected else { return false }
         
+        let currentPath = viewModel.currentPath
         for provider in providers {
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
                 guard let data = item as? Data,
@@ -250,9 +251,9 @@ struct FileBrowserView: View {
                 }
                 
                 let fileName = url.lastPathComponent
-                let destinationPath = viewModel.currentPath.hasSuffix("/")
-                    ? viewModel.currentPath + fileName
-                    : viewModel.currentPath + "/" + fileName
+                let destinationPath = currentPath.hasSuffix("/")
+                    ? currentPath + fileName
+                    : currentPath + "/" + fileName
                 
                 var attributes: [FileAttributeKey: Any]?
                 do {

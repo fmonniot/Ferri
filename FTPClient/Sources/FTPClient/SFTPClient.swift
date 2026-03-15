@@ -136,31 +136,36 @@ public actor SFTPClient {
     }
 
     private func openSFTPSubsystem(channel: Channel) async throws {
-        logger.debug("Getting NIOSSHHandler from pipeline")
-        let sshHandler = try await channel.pipeline.handler(type: NIOSSHHandler.self).get()
-        logger.debug("Got NIOSSHHandler, creating child channel")
-
         // Snapshot protocol_ into a local so the closure doesn't capture actor-isolated self.
         let proto = self.protocol_
 
-        // createChannel is NOT thread-safe – it must be called on the channel's event loop.
+        // Retrieve the NIOSSHHandler and create the child channel entirely on the
+        // channel's event loop to avoid crossing a concurrency boundary with the
+        // non-Sendable NIOSSHHandler type.
         let subsystemChannel: Channel = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Channel, Error>) in
             channel.eventLoop.execute {
-                let promise = channel.eventLoop.makePromise(of: Channel.self)
-
-                sshHandler.createChannel(promise) { childChannel, _ in
-                    logger.debug("Child channel initializer called")
-                    return childChannel.pipeline.addHandler(SFTPChannelHandler(client: self, protocol_: proto))
-                }
-
-                promise.futureResult.whenComplete { result in
-                    switch result {
-                    case .success(let ch):
-                        logger.debug("Child channel created successfully")
-                        continuation.resume(returning: ch)
+                channel.pipeline.handler(type: NIOSSHHandler.self).whenComplete { handlerResult in
+                    switch handlerResult {
                     case .failure(let error):
-                        logger.error("Child channel creation failed: \(error)")
                         continuation.resume(throwing: error)
+                    case .success(let sshHandler):
+                        let promise = channel.eventLoop.makePromise(of: Channel.self)
+
+                        sshHandler.createChannel(promise) { childChannel, _ in
+                            logger.debug("Child channel initializer called")
+                            return childChannel.pipeline.addHandler(SFTPChannelHandler(client: self, protocol_: proto))
+                        }
+
+                        promise.futureResult.whenComplete { result in
+                            switch result {
+                            case .success(let ch):
+                                logger.debug("Child channel created successfully")
+                                continuation.resume(returning: ch)
+                            case .failure(let error):
+                                logger.error("Child channel creation failed: \(error)")
+                                continuation.resume(throwing: error)
+                            }
+                        }
                     }
                 }
             }
