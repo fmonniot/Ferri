@@ -297,6 +297,11 @@ public actor SFTPClient {
         currentPath
     }
 
+    /// Default timeout for file transfer operations (5 minutes per chunk).
+    /// This is intentionally much longer than the general `operationTimeout`
+    /// because large-file reads over slow connections can take significant time.
+    private let transferTimeout: TimeAmount = .seconds(300)
+
     public func downloadToFile(remotePath: String, localURL: URL, progress: ((UInt64, UInt64?) -> Void)? = nil) async throws {
         guard isConnectedFlag else {
             throw SFTPClientError.notConnected
@@ -317,7 +322,7 @@ public actor SFTPClient {
             let chunkSize: UInt32 = 32768
 
             while true {
-                let data = try await readFromHandle(handle: handle, offset: offset, length: chunkSize)
+                let data = try await readFromHandle(handle: handle, offset: offset, length: chunkSize, timeout: transferTimeout)
 
                 if data.readableBytes == 0 {
                     break
@@ -352,7 +357,7 @@ public actor SFTPClient {
             let chunkSize: UInt32 = 32768
 
             while true {
-                let buffer = try await readFromHandle(handle: handle, offset: offset, length: chunkSize)
+                let buffer = try await readFromHandle(handle: handle, offset: offset, length: chunkSize, timeout: transferTimeout)
                 if buffer.readableBytes == 0 { break }
                 if let bytes = buffer.getBytes(at: 0, length: buffer.readableBytes) {
                     result.append(contentsOf: bytes)
