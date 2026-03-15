@@ -2,6 +2,9 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 import FTPClient
+import Logging
+
+private let logger = Logger(label: "com.ferri.drag-source")
 
 // MARK: - UserInfo carried by each NSFilePromiseProvider
 
@@ -54,6 +57,8 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         dragOrigin = nil
 
         let fileType = file.isDirectory ? UTType.folder.identifier : UTType.data.identifier
+        logger.info("Starting drag for \(file.isDirectory ? "directory" : "file"): \(file.path)")
+
         let provider = NSFilePromiseProvider(fileType: fileType, delegate: self)
         provider.userInfo = FilePromiseInfo(remoteFile: file)
 
@@ -94,6 +99,7 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         }
 
         let file = info.remoteFile
+        logger.info("Fulfilling promise for \(file.isDirectory ? "directory" : "file"): \(file.path) -> \(url.path)")
 
         Task {
             do {
@@ -102,8 +108,10 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
                 } else {
                     try await FTPClient.shared.downloadFile(named: file.path, to: url)
                 }
+                logger.info("Promise fulfilled successfully: \(file.name)")
                 completionHandler(nil)
             } catch {
+                logger.error("Promise failed for \(file.name): \(error)")
                 completionHandler(error)
             }
         }
@@ -114,19 +122,20 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
     /// Downloads an entire remote directory tree to a local URL, preserving structure.
     /// Each file is downloaded independently and streams to disk as bytes arrive.
     private func downloadDirectoryRecursively(remotePath: String, to localURL: URL) async throws {
-        // Create the local directory
+        logger.debug("Creating local directory: \(localURL.path)")
         try FileManager.default.createDirectory(at: localURL, withIntermediateDirectories: true)
 
-        // List immediate children
         let entries = try await FTPClient.shared.listDirectory(at: remotePath)
+        logger.info("Listed \(entries.count) entries in \(remotePath)")
 
-        // Download each entry — files directly, directories recursively
         for entry in entries {
             let childURL = localURL.appendingPathComponent(entry.name)
             if entry.isDirectory {
                 try await downloadDirectoryRecursively(remotePath: entry.path, to: childURL)
             } else {
+                logger.debug("Downloading file: \(entry.path) -> \(childURL.path)")
                 try await FTPClient.shared.downloadFile(named: entry.path, to: childURL)
+                logger.debug("Downloaded: \(entry.name)")
             }
         }
     }
