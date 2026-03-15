@@ -102,6 +102,7 @@ struct SFTPClientTests {
             "--name", containerName,
             "-p", "\(serverPort):22",
             "-e", "PASSWORD=\(serverPassword)",
+            "--platform", "linux/amd64",
             "atmoz/sftp:latest",
             serverUsername
         ]
