@@ -70,7 +70,7 @@ struct MainView: View {
                 try await FTPClient.shared.connect(to: server)
                 isConnected = true
                 connectionViewModel.setConnectionStatus(.connected, for: server.id)
-                await fileBrowserViewModel.loadDirectory()
+                await fileBrowserViewModel.loadDirectory(at: server.initialDirectoryPath ?? "")
             } catch {
                 isConnected = false
                 errorMessage = error.localizedDescription

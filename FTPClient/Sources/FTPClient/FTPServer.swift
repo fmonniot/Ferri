@@ -9,6 +9,7 @@ public struct FTPServer: Identifiable, Codable, Hashable {
     public var password: String
     public var privateKeyPath: String?
     public var keyPassphrase: String?
+    public var initialDirectoryPath: String?
 
     public init(
         id: UUID = UUID(),
@@ -18,7 +19,8 @@ public struct FTPServer: Identifiable, Codable, Hashable {
         username: String = "",
         password: String = "",
         privateKeyPath: String? = nil,
-        keyPassphrase: String? = nil
+        keyPassphrase: String? = nil,
+        initialDirectoryPath: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -28,6 +30,7 @@ public struct FTPServer: Identifiable, Codable, Hashable {
         self.password = password
         self.privateKeyPath = privateKeyPath
         self.keyPassphrase = keyPassphrase
+        self.initialDirectoryPath = initialDirectoryPath
     }
     
     public var displayName: String {
@@ -35,7 +38,7 @@ public struct FTPServer: Identifiable, Codable, Hashable {
     }
     
     public enum CodingKeys: String, CodingKey {
-        case id, name, host, port, username, password, privateKeyPath, keyPassphrase
+        case id, name, host, port, username, password, privateKeyPath, keyPassphrase, initialDirectoryPath
     }
     
     public init(from decoder: Decoder) throws {
@@ -48,5 +51,6 @@ public struct FTPServer: Identifiable, Codable, Hashable {
         password = try container.decode(String.self, forKey: .password)
         privateKeyPath = try container.decodeIfPresent(String.self, forKey: .privateKeyPath)
         keyPassphrase = try container.decodeIfPresent(String.self, forKey: .keyPassphrase)
+        initialDirectoryPath = try container.decodeIfPresent(String.self, forKey: .initialDirectoryPath)
     }
 }

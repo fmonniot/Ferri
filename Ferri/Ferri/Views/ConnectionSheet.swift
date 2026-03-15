@@ -14,6 +14,7 @@ struct ConnectionSheet: View {
     @State private var password: String = ""
     @State private var privateKeyPath: String = ""
     @State private var keyPassphrase: String = ""
+    @State private var initialDirectoryPath: String = ""
     
     private var isEditing: Bool { server != nil }
     
@@ -60,6 +61,13 @@ struct ConnectionSheet: View {
                 } header: {
                     Text("Authentication")
                 }
+                
+                Section {
+                    TextField("Initial Directory (optional)", text: $initialDirectoryPath)
+                        .textFieldStyle(.roundedBorder)
+                } header: {
+                    Text("Options")
+                }
             }
             .formStyle(.grouped)
             .padding()
@@ -82,7 +90,7 @@ struct ConnectionSheet: View {
             }
             .padding()
         }
-        .frame(width: 450, height: 400)
+        .frame(width: 450, height: 480)
         .onAppear {
             loadServerData()
         }
@@ -101,6 +109,7 @@ struct ConnectionSheet: View {
             password = existingServer.password
             privateKeyPath = existingServer.privateKeyPath ?? ""
             keyPassphrase = existingServer.keyPassphrase ?? ""
+            initialDirectoryPath = existingServer.initialDirectoryPath ?? ""
         }
     }
     
@@ -128,7 +137,8 @@ struct ConnectionSheet: View {
                 username: username,
                 password: password,
                 privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath,
-                keyPassphrase: keyPassphrase.isEmpty ? nil : keyPassphrase
+                keyPassphrase: keyPassphrase.isEmpty ? nil : keyPassphrase,
+                initialDirectoryPath: initialDirectoryPath.isEmpty ? nil : initialDirectoryPath
             )
         } else {
             serverToSave = FTPServer(
@@ -138,7 +148,8 @@ struct ConnectionSheet: View {
                 username: username,
                 password: password,
                 privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath,
-                keyPassphrase: keyPassphrase.isEmpty ? nil : keyPassphrase
+                keyPassphrase: keyPassphrase.isEmpty ? nil : keyPassphrase,
+                initialDirectoryPath: initialDirectoryPath.isEmpty ? nil : initialDirectoryPath
             )
         }
         
