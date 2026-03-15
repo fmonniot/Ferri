@@ -40,12 +40,11 @@ actor SFTPClient {
     private var sshChannel: Channel?
     private var sftpChannel: Channel?
     private var protocol_: SFTPProtocol
-    private nonisolated(unsafe) var isConnectedFlag = false
+    private var isConnectedFlag = false
 
     private(set) var currentPath: String = "/"
 
     private var pendingRequests: [UInt32: CheckedContinuation<SFTPResponse, Error>] = [:]
-    private let requestLock = NSLock()
     
     var operationTimeout: TimeAmount = .seconds(30)
 
@@ -59,7 +58,7 @@ actor SFTPClient {
         }
     }
 
-    nonisolated var isConnected: Bool {
+    var isConnected: Bool {
         isConnectedFlag
     }
 
@@ -81,9 +80,7 @@ actor SFTPClient {
             let bootstrap = ClientBootstrap(group: group)
                 .channelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
                 .channelInitializer { [self] channel in
-                    let loggingHandler = LoggingChannelHandler()
-                    return channel.pipeline.addHandlers([
-                        loggingHandler,
+                    channel.pipeline.addHandler(
                         NIOSSHHandler(
                             role: .client(.init(
                                 userAuthDelegate: userAuthDelegate,
@@ -96,7 +93,7 @@ actor SFTPClient {
                                 )
                             }
                         )
-                    ])
+                    )
                 }
                 .connectTimeout(.seconds(30))
 
@@ -140,6 +137,28 @@ actor SFTPClient {
         }
         
         self.sftpChannel = subsystemChannel
+
+        let initRequest = SFTPInitRequest(id: 0)
+        let buffer = try protocol_.encodeRequest(initRequest)
+        
+        let versionResponse = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<SFTPResponse, Error>) in
+            pendingRequests[0] = continuation
+            
+            var mutableBuffer = buffer
+            subsystemChannel.writeAndFlush(mutableBuffer).whenFailure { [self] error in
+                self.pendingRequests.removeValue(forKey: 0)
+                continuation.resume(throwing: error)
+            }
+        }
+        
+        if case .version(let version, _) = versionResponse {
+            guard version == 3 else {
+                throw SFTPClientError.subsystemOpenFailed("Unsupported SFTP version: \(version)")
+            }
+            print("[SFTPClient] SFTP version \(version) negotiated")
+        } else {
+            throw SFTPClientError.subsystemOpenFailed("Invalid version response")
+        }
     }
 
     func disconnect() async throws {
@@ -170,31 +189,34 @@ actor SFTPClient {
         let absolutePath = resolvePath(path)
         
         let handle = try await openDirectory(path: absolutePath, timeout: timeout)
-        defer { Task { try? await closeHandle(handle) } }
 
         var files: [RemoteFile] = []
 
-        while true {
-            let entries = try await readDirectory(handle: handle, timeout: timeout)
-            if entries.isEmpty { break }
+        do {
+            while true {
+                let entries = try await readDirectory(handle: handle, timeout: timeout)
+                if entries.isEmpty { break }
 
-            for entry in entries {
-                guard entry.filename != "." && entry.filename != ".." else { continue }
+                for entry in entries {
+                    guard entry.filename != "." && entry.filename != ".." else { continue }
 
-                let filePath = absolutePath.hasSuffix("/") 
-                    ? absolutePath + entry.filename 
-                    : absolutePath + "/" + entry.filename
+                    let filePath = absolutePath.hasSuffix("/") 
+                        ? absolutePath + entry.filename 
+                        : absolutePath + "/" + entry.filename
 
-                files.append(RemoteFile(
-                    name: entry.filename,
-                    path: filePath,
-                    isDirectory: entry.isDirectory,
-                    size: entry.attributes.size.map { Int64($0) } ?? 0,
-                    modificationDate: entry.attributes.modifyTime.map { Date(timeIntervalSince1970: TimeInterval($0)) },
-                    permissions: formatPermissions(entry.attributes.permissions)
-                ))
+                    files.append(RemoteFile(
+                        name: entry.filename,
+                        path: filePath,
+                        isDirectory: entry.isDirectory,
+                        size: entry.attributes.size.map { Int64($0) } ?? 0,
+                        modificationDate: entry.attributes.modifyTime.map { Date(timeIntervalSince1970: TimeInterval($0)) },
+                        permissions: formatPermissions(entry.attributes.permissions)
+                    ))
+                }
             }
         }
+        
+        try? await closeHandle(handle)
 
         return files.sorted { file1, file2 in
             if file1.isDirectory != file2.isDirectory {
@@ -210,6 +232,12 @@ actor SFTPClient {
         }
 
         let absolutePath = resolvePath(path)
+        
+        let stat = try await stat(path: absolutePath)
+        guard stat.isDirectory else {
+            throw SFTPClientError.requestFailed(UInt32.max, "Not a directory: \(path)")
+        }
+        
         currentPath = absolutePath
     }
 
@@ -225,32 +253,36 @@ actor SFTPClient {
         let absolutePath = resolvePath(remotePath)
         
         let handle = try await openFile(path: absolutePath, flags: 0x00000001)
-        defer { Task { try? await closeHandle(handle) } }
 
         let stat = try await fstatHandle(handle)
         let totalSize = stat.size
 
         FileManager.default.createFile(atPath: localURL.path, contents: nil)
         let fileHandle = try FileHandle(forWritingTo: localURL)
-        defer { try? fileHandle.close() }
+        
+        do {
+            var offset: UInt64 = 0
+            let chunkSize: UInt32 = 32768
 
-        var offset: UInt64 = 0
-        let chunkSize: UInt32 = 32768
+            while true {
+                let data = try await readFromHandle(handle: handle, offset: offset, length: chunkSize)
 
-        while true {
-            let data = try await readFromHandle(handle: handle, offset: offset, length: chunkSize)
+                if data.readableBytes == 0 {
+                    break
+                }
 
-            if data.readableBytes == 0 {
-                break
+                if let bytes = data.getBytes(at: 0, length: data.readableBytes) {
+                    try fileHandle.write(contentsOf: bytes)
+                }
+
+                offset += UInt64(data.readableBytes)
+                progress?(offset, totalSize)
             }
-
-            if let bytes = data.getBytes(at: 0, length: data.readableBytes) {
-                try fileHandle.write(contentsOf: bytes)
-            }
-
-            offset += UInt64(data.readableBytes)
-            progress?(offset, totalSize)
+            
+            try fileHandle.close()
         }
+        
+        try? await closeHandle(handle)
     }
 
     private func resolvePath(_ path: String) -> String {
@@ -266,32 +298,8 @@ actor SFTPClient {
         }
         return currentPath + "/" + path
     }
-
-    private func sendRequest(_ request: SFTPRequest) async throws -> SFTPResponse {
-        guard let channel = sftpChannel else {
-            throw SFTPClientError.notConnected
-        }
-
-        print("[SFTPClient] Sending \(request.type) request (id: \(request.id))")
-        
-        let buffer = try protocol_.encodeRequest(request)
-        print("[SFTPClient] Encoded \(buffer.readableBytes) bytes")
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            requestLock.lock()
-            pendingRequests[request.id] = continuation
-            requestLock.unlock()
-            
-            var mutableBuffer = buffer
-            channel.writeAndFlush(mutableBuffer).whenFailure { error in
-                self.requestLock.lock()
-                self.pendingRequests.removeValue(forKey: request.id)
-                self.requestLock.unlock()
-                print("[SFTPClient] Write failed: \(error)")
-                continuation.resume(throwing: error)
-            }
-        }
-    }
+    
+    private var timeoutTask: Task<Void, Never>?
     
     private func sendRequestWithTimeout(_ request: SFTPRequest, timeout: TimeAmount? = nil) async throws -> SFTPResponse {
         let effectiveTimeout = timeout ?? operationTimeout
@@ -308,16 +316,21 @@ actor SFTPClient {
             throw SFTPClientError.notConnected
         }
         
-        return try await withCheckedThrowingContinuation { continuation in
-            requestLock.lock()
-            pendingRequests[requestId] = continuation
-            requestLock.unlock()
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<SFTPResponse, Error>) in
+            self.timeoutTask = Task {
+                try? await Task.sleep(nanoseconds: UInt64(effectiveTimeout.nanoseconds))
+                guard self.pendingRequests[requestId] != nil else { return }
+                self.pendingRequests.removeValue(forKey: requestId)
+                continuation.resume(throwing: SFTPClientError.timeout("Request \(requestId) timed out"))
+            }
+            
+            self.pendingRequests[requestId] = continuation
             
             var mutableBuffer = buffer
             channel.writeAndFlush(mutableBuffer).whenFailure { [self] error in
-                self.requestLock.lock()
+                self.timeoutTask?.cancel()
+                self.timeoutTask = nil
                 self.pendingRequests.removeValue(forKey: requestId)
-                self.requestLock.unlock()
                 print("[SFTPClient] Write failed: \(error)")
                 continuation.resume(throwing: error)
             }
@@ -326,9 +339,9 @@ actor SFTPClient {
 
     func handleResponse(_ response: SFTPResponse, requestId: UInt32) {
         print("[SFTPClient] Received response for request \(requestId)")
-        requestLock.lock()
+        timeoutTask?.cancel()
+        timeoutTask = nil
         let continuation = pendingRequests.removeValue(forKey: requestId)
-        requestLock.unlock()
         
         continuation?.resume(returning: response)
     }
@@ -455,20 +468,38 @@ actor SFTPClient {
         }
     }
 
+    private func stat(path: String, timeout: TimeAmount? = nil) async throws -> SFTPFileAttributes {
+        let request = SFTPStatRequest(
+            id: protocol_.nextId(),
+            path: path
+        )
+
+        let response = try await sendRequestWithTimeout(request, timeout: timeout)
+
+        switch response {
+        case .attrs(_, let attrs):
+            return attrs
+        case .status(_, let code, let message, _):
+            throw SFTPClientError.requestFailed(code, message)
+        default:
+            throw SFTPClientError.invalidResponse
+        }
+    }
+
     private func formatPermissions(_ permissions: UInt32?) -> String {
         guard let perms = permissions else { return "----------" }
         
         var result = ""
         
         result += (perms & 0o40000 != 0) ? "d" : "-"
-        result += (perms & 0o100 != 0) ? "r" : "-"
-        result += (perms & 0o040 != 0) ? "w" : "-"
-        result += (perms & 0o020 != 0) ? "x" : "-"
-        result += (perms & 0o010 != 0) ? "r" : "-"
-        result += (perms & 0o004 != 0) ? "w" : "-"
-        result += (perms & 0o002 != 0) ? "x" : "-"
-        result += (perms & 0o001 != 0) ? "r" : "-"
-        result += (perms & 0o001 != 0) ? "w" : "-"
+        result += (perms & 0o400 != 0) ? "r" : "-"
+        result += (perms & 0o200 != 0) ? "w" : "-"
+        result += (perms & 0o100 != 0) ? "x" : "-"
+        result += (perms & 0o040 != 0) ? "r" : "-"
+        result += (perms & 0o020 != 0) ? "w" : "-"
+        result += (perms & 0o010 != 0) ? "x" : "-"
+        result += (perms & 0o004 != 0) ? "r" : "-"
+        result += (perms & 0o002 != 0) ? "w" : "-"
         result += (perms & 0o001 != 0) ? "x" : "-"
         
         return result
@@ -490,8 +521,7 @@ struct SSHUserAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
             ))
         } else if let privateKeyPath = credentials.privateKeyPath,
                   let privateKeyData = try? Data(contentsOf: URL(fileURLWithPath: privateKeyPath)) {
-            let passphrase = credentials.keyPassphrase
-            if let privateKey = try? NIOSSHPrivateKey(ed25519Key: .init()) {
+            if let privateKey = loadPrivateKey(from: privateKeyData) {
                 nextChallengePromise.succeed(NIOSSHUserAuthenticationOffer(
                     username: credentials.username,
                     serviceName: "",
@@ -502,6 +532,69 @@ struct SSHUserAuthDelegate: NIOSSHClientUserAuthenticationDelegate {
             }
         } else {
             nextChallengePromise.succeed(nil)
+        }
+    }
+    
+    private func loadPrivateKey(from data: Data) -> NIOSSHPrivateKey? {
+        if let privateKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: data) {
+            return NIOSSHPrivateKey(ed25519Key: privateKey)
+        }
+        
+        if let pemString = String(data: data, encoding: .utf8) {
+            let lines = pemString.components(separatedBy: "\n")
+            let base64Content = lines
+                .filter { !$0.hasPrefix("-----") && !$0.isEmpty }
+                .joined()
+            
+            if let keyData = Data(base64Encoded: base64Content) {
+                if let privateKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: keyData) {
+                    return NIOSSHPrivateKey(ed25519Key: privateKey)
+                }
+            }
+        }
+        
+        return nil
+    }
+}
+
+protocol SFTPHostKeyVerificationDelegate: AnyObject {
+    func verifyHostKey(host: String, port: Int, fingerprint: String) -> Bool
+}
+
+extension NIOSSHPublicKey {
+    var fingerprint: String {
+        return "unknown"
+    }
+}
+
+final class SFTPHostKeyDelegate: NIOSSHClientServerAuthenticationDelegate {
+    private let host: String
+    private let port: Int
+    private weak var verificationDelegate: SFTPHostKeyVerificationDelegate?
+    
+    init(host: String, port: Int, verificationDelegate: SFTPHostKeyVerificationDelegate?) {
+        self.host = host
+        self.port = port
+        self.verificationDelegate = verificationDelegate
+    }
+    
+    func validateHostKey(
+        hostKey: NIOSSHPublicKey,
+        validationCompletePromise: EventLoopPromise<Void>
+    ) {
+        let fingerprint = hostKey.fingerprint
+        
+        let isValid: Bool
+        if let delegate = verificationDelegate {
+            isValid = delegate.verifyHostKey(host: host, port: port, fingerprint: fingerprint)
+        } else {
+            isValid = false
+        }
+        
+        if isValid {
+            validationCompletePromise.succeed(())
+        } else {
+            validationCompletePromise.fail(SFTPClientError.authenticationFailed("Host key verification failed for \(host):\(port)"))
         }
     }
 }
@@ -535,11 +628,12 @@ final class SFTPChannelHandler: ChannelInboundHandler, RemovableChannelHandler {
         
         do {
             while buffer.readableBytes > 0 {
-                if let (id, response) = try sftpProtocol.decodeResponse(&buffer) {
-                    print("[SFTPChannelHandler] Decoded response for request \(id)")
-                    Task {
-                        await client.handleResponse(response, requestId: id)
-                    }
+                guard let (id, response) = try sftpProtocol.decodeResponse(&buffer) else {
+                    break
+                }
+                print("[SFTPChannelHandler] Decoded response for request \(id)")
+                Task {
+                    await client.handleResponse(response, requestId: id)
                 }
             }
         } catch {
@@ -552,33 +646,14 @@ final class SFTPChannelHandler: ChannelInboundHandler, RemovableChannelHandler {
         context.close(promise: nil)
     }
     
-    func channelInactive(context: ChannelHandlerContext) {
-        print("[SFTPChannelHandler] Channel inactive")
-    }
-}
-
-final class LoggingChannelHandler: ChannelInboundHandler, RemovableChannelHandler {
-    typealias InboundIn = ByteBuffer
-    
-    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        var buffer = unwrapInboundIn(data)
-        let bytes = buffer.readableBytes
-        print("[LoggingChannelHandler] IN: \(bytes) bytes")
-        context.fireChannelRead(data)
-    }
     
     func channelActive(context: ChannelHandlerContext) {
-        print("[LoggingChannelHandler] Channel active")
+        print("[SFTPChannelHandler] Channel active")
         context.fireChannelActive()
     }
-    
+
     func channelInactive(context: ChannelHandlerContext) {
-        print("[LoggingChannelHandler] Channel inactive")
+        print("[SFTPChannelHandler] Channel inactive")
         context.fireChannelInactive()
-    }
-    
-    func errorCaught(context: ChannelHandlerContext, error: Error) {
-        print("[LoggingChannelHandler] Error: \(error)")
-        context.fireErrorCaught(error)
     }
 }
