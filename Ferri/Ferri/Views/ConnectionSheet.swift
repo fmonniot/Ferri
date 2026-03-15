@@ -15,6 +15,7 @@ struct ConnectionSheet: View {
     @State private var privateKeyPath: String = ""
     @State private var keyPassphrase: String = ""
     @State private var initialDirectoryPath: String = ""
+    @State private var autoConnect: Bool = false
     
     private var isEditing: Bool { server != nil }
     
@@ -65,6 +66,8 @@ struct ConnectionSheet: View {
                 Section {
                     TextField("Initial Directory (optional)", text: $initialDirectoryPath)
                         .textFieldStyle(.roundedBorder)
+                    
+                    Toggle("Connect on launch", isOn: $autoConnect)
                 } header: {
                     Text("Options")
                 }
@@ -90,7 +93,7 @@ struct ConnectionSheet: View {
             }
             .padding()
         }
-        .frame(width: 450, height: 480)
+        .frame(width: 450, height: 520)
         .onAppear {
             loadServerData()
         }
@@ -110,6 +113,7 @@ struct ConnectionSheet: View {
             privateKeyPath = existingServer.privateKeyPath ?? ""
             keyPassphrase = existingServer.keyPassphrase ?? ""
             initialDirectoryPath = existingServer.initialDirectoryPath ?? ""
+            autoConnect = existingServer.autoConnect
         }
     }
     
@@ -138,7 +142,8 @@ struct ConnectionSheet: View {
                 password: password,
                 privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath,
                 keyPassphrase: keyPassphrase.isEmpty ? nil : keyPassphrase,
-                initialDirectoryPath: initialDirectoryPath.isEmpty ? nil : initialDirectoryPath
+                initialDirectoryPath: initialDirectoryPath.isEmpty ? nil : initialDirectoryPath,
+                autoConnect: autoConnect
             )
         } else {
             serverToSave = FTPServer(
@@ -149,7 +154,8 @@ struct ConnectionSheet: View {
                 password: password,
                 privateKeyPath: privateKeyPath.isEmpty ? nil : privateKeyPath,
                 keyPassphrase: keyPassphrase.isEmpty ? nil : keyPassphrase,
-                initialDirectoryPath: initialDirectoryPath.isEmpty ? nil : initialDirectoryPath
+                initialDirectoryPath: initialDirectoryPath.isEmpty ? nil : initialDirectoryPath,
+                autoConnect: autoConnect
             )
         }
         

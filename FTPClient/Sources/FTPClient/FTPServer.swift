@@ -10,6 +10,7 @@ public struct FTPServer: Identifiable, Codable, Hashable {
     public var privateKeyPath: String?
     public var keyPassphrase: String?
     public var initialDirectoryPath: String?
+    public var autoConnect: Bool
 
     public init(
         id: UUID = UUID(),
@@ -20,7 +21,8 @@ public struct FTPServer: Identifiable, Codable, Hashable {
         password: String = "",
         privateKeyPath: String? = nil,
         keyPassphrase: String? = nil,
-        initialDirectoryPath: String? = nil
+        initialDirectoryPath: String? = nil,
+        autoConnect: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -31,6 +33,7 @@ public struct FTPServer: Identifiable, Codable, Hashable {
         self.privateKeyPath = privateKeyPath
         self.keyPassphrase = keyPassphrase
         self.initialDirectoryPath = initialDirectoryPath
+        self.autoConnect = autoConnect
     }
     
     public var displayName: String {
@@ -38,7 +41,7 @@ public struct FTPServer: Identifiable, Codable, Hashable {
     }
     
     public enum CodingKeys: String, CodingKey {
-        case id, name, host, port, username, password, privateKeyPath, keyPassphrase, initialDirectoryPath
+        case id, name, host, port, username, password, privateKeyPath, keyPassphrase, initialDirectoryPath, autoConnect
     }
     
     public init(from decoder: Decoder) throws {
@@ -52,5 +55,6 @@ public struct FTPServer: Identifiable, Codable, Hashable {
         privateKeyPath = try container.decodeIfPresent(String.self, forKey: .privateKeyPath)
         keyPassphrase = try container.decodeIfPresent(String.self, forKey: .keyPassphrase)
         initialDirectoryPath = try container.decodeIfPresent(String.self, forKey: .initialDirectoryPath)
+        autoConnect = try container.decodeIfPresent(Bool.self, forKey: .autoConnect) ?? false
     }
 }

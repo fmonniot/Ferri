@@ -32,12 +32,18 @@ final class ConnectionListViewModel: ObservableObject {
         storage.addConnection(server)
         connections.append(server)
         connectionStatus[server.id] = .disconnected
+        if server.autoConnect {
+            clearAutoConnect(except: server.id)
+        }
     }
     
     func updateConnection(_ server: FTPServer) {
         storage.updateConnection(server)
         if let index = connections.firstIndex(where: { $0.id == server.id }) {
             connections[index] = server
+        }
+        if server.autoConnect {
+            clearAutoConnect(except: server.id)
         }
     }
     
@@ -53,5 +59,14 @@ final class ConnectionListViewModel: ObservableObject {
     
     func selectConnection(_ connection: FTPServer) {
         selectedConnection = connection
+    }
+    
+    private func clearAutoConnect(except serverID: UUID) {
+        var changed = false
+        for i in connections.indices where connections[i].id != serverID && connections[i].autoConnect {
+            connections[i].autoConnect = false
+            storage.updateConnection(connections[i])
+            changed = true
+        }
     }
 }

@@ -60,6 +60,9 @@ struct MainView: View {
         }
         .onAppear {
             fileBrowserViewModel.setConnectionViewModel(connectionViewModel)
+            if let server = connectionViewModel.connections.first(where: { $0.autoConnect }) {
+                connectionViewModel.selectConnection(server)
+            }
         }
     }
     
