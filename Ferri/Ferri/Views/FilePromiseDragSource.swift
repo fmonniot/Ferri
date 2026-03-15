@@ -3,29 +3,25 @@ import AppKit
 import UniformTypeIdentifiers
 import FTPClient
 
-// MARK: - UserInfo keys for file promise providers
+// MARK: - UserInfo carried by each NSFilePromiseProvider
 
-/// Stored in NSFilePromiseProvider.userInfo to carry the remote file and its
-/// relative path (used for directory tree downloads).
+/// For single-file drags, holds the RemoteFile.
+/// For directory drags, holds the RemoteFile (the directory itself).
+/// The delegate checks `remoteFile.isDirectory` to decide which download path to take.
 struct FilePromiseInfo {
     let remoteFile: RemoteFile
-    /// For single files this is just the filename. For files inside a dragged
-    /// directory this is a relative path like "folder/sub/file.txt".
-    let relativePath: String
 }
 
 // MARK: - NSFilePromiseProvider bridge for dragging remote files to Finder
 
-/// An NSView that acts as a drag source for remote files using NSFilePromiseProvider.
-/// Supports both individual files and directories (which are recursively listed
-/// and turned into one promise per file).
+/// An NSView that acts as a drag source for remote files and directories using
+/// NSFilePromiseProvider. Files are promised individually; directories are promised
+/// as a single folder and recursively downloaded on fulfillment.
 class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProviderDelegate {
 
     var remoteFile: RemoteFile?
 
     private var dragOrigin: NSPoint?
-    private var pendingDragEvent: NSEvent?
-    private var listingTask: Task<Void, Never>?
     private static let dragThreshold: CGFloat = 3.0
 
     private lazy var filePromiseQueue: OperationQueue = {
@@ -57,28 +53,9 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         // Reset so we don't start multiple drags
         dragOrigin = nil
 
-        if file.isDirectory {
-            beginDirectoryDrag(file: file, event: event)
-        } else {
-            beginFileDrag(file: file, event: event)
-        }
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        dragOrigin = nil
-        listingTask?.cancel()
-        listingTask = nil
-        // Forward the click so table selection still works
-        super.mouseUp(with: event)
-        nextResponder?.mouseUp(with: event)
-    }
-
-    // MARK: - Single file drag
-
-    private func beginFileDrag(file: RemoteFile, event: NSEvent) {
-        let info = FilePromiseInfo(remoteFile: file, relativePath: file.name)
-        let provider = NSFilePromiseProvider(fileType: UTType.data.identifier, delegate: self)
-        provider.userInfo = info
+        let fileType = file.isDirectory ? UTType.folder.identifier : UTType.data.identifier
+        let provider = NSFilePromiseProvider(fileType: fileType, delegate: self)
+        provider.userInfo = FilePromiseInfo(remoteFile: file)
 
         let draggingItem = NSDraggingItem(pasteboardWriter: provider)
         draggingItem.setDraggingFrame(bounds, contents: dragPreviewImage(for: file))
@@ -86,63 +63,11 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         beginDraggingSession(with: [draggingItem], event: event, source: self)
     }
 
-    // MARK: - Directory drag
-
-    private func beginDirectoryDrag(file: RemoteFile, event: NSEvent) {
-        // Store the event — we need it to start the drag session after listing completes
-        pendingDragEvent = event
-
-        listingTask = Task { [weak self] in
-            guard let self else { return }
-
-            do {
-                let files = try await FTPClient.shared.listDirectoryRecursively(at: file.path)
-
-                // Compute the prefix to strip: the parent directory of the dragged folder.
-                // e.g. if dragging "/home/user/projects", prefix is "/home/user/"
-                // so "projects/src/main.swift" becomes the relative path.
-                let parentPath: String
-                if let lastSlash = file.path.lastIndex(of: "/") {
-                    parentPath = String(file.path[...lastSlash])
-                } else {
-                    parentPath = ""
-                }
-
-                guard !Task.isCancelled else { return }
-
-                var draggingItems: [NSDraggingItem] = []
-
-                for childFile in files {
-                    let relativePath: String
-                    if childFile.path.hasPrefix(parentPath) {
-                        relativePath = String(childFile.path.dropFirst(parentPath.count))
-                    } else {
-                        relativePath = childFile.name
-                    }
-
-                    let info = FilePromiseInfo(remoteFile: childFile, relativePath: relativePath)
-                    let provider = NSFilePromiseProvider(fileType: UTType.data.identifier, delegate: self)
-                    provider.userInfo = info
-
-                    let item = NSDraggingItem(pasteboardWriter: provider)
-                    item.setDraggingFrame(self.bounds, contents: self.dragPreviewImage(for: file))
-                    draggingItems.append(item)
-                }
-
-                guard !draggingItems.isEmpty, !Task.isCancelled,
-                      let event = self.pendingDragEvent else { return }
-
-                await MainActor.run {
-                    self.beginDraggingSession(with: draggingItems, event: event, source: self)
-                    self.pendingDragEvent = nil
-                }
-            } catch {
-                // Listing failed — silently abandon the drag
-                await MainActor.run {
-                    self.pendingDragEvent = nil
-                }
-            }
-        }
+    override func mouseUp(with event: NSEvent) {
+        dragOrigin = nil
+        // Forward the click so table selection still works
+        super.mouseUp(with: event)
+        nextResponder?.mouseUp(with: event)
     }
 
     // MARK: - NSDraggingSource
@@ -155,7 +80,7 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
 
     func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
         guard let info = filePromiseProvider.userInfo as? FilePromiseInfo else { return "unknown" }
-        return info.relativePath
+        return info.remoteFile.name
     }
 
     func operationQueue(for filePromiseProvider: NSFilePromiseProvider) -> OperationQueue {
@@ -168,16 +93,40 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
             return
         }
 
+        let file = info.remoteFile
+
         Task {
             do {
-                // Ensure parent directories exist (needed for files inside dragged directories)
-                let parentDir = url.deletingLastPathComponent()
-                try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
-
-                try await FTPClient.shared.downloadFile(named: info.remoteFile.path, to: url)
+                if file.isDirectory {
+                    try await downloadDirectoryRecursively(remotePath: file.path, to: url)
+                } else {
+                    try await FTPClient.shared.downloadFile(named: file.path, to: url)
+                }
                 completionHandler(nil)
             } catch {
                 completionHandler(error)
+            }
+        }
+    }
+
+    // MARK: - Recursive directory download
+
+    /// Downloads an entire remote directory tree to a local URL, preserving structure.
+    /// Each file is downloaded independently and streams to disk as bytes arrive.
+    private func downloadDirectoryRecursively(remotePath: String, to localURL: URL) async throws {
+        // Create the local directory
+        try FileManager.default.createDirectory(at: localURL, withIntermediateDirectories: true)
+
+        // List immediate children
+        let entries = try await FTPClient.shared.listDirectory(at: remotePath)
+
+        // Download each entry — files directly, directories recursively
+        for entry in entries {
+            let childURL = localURL.appendingPathComponent(entry.name)
+            if entry.isDirectory {
+                try await downloadDirectoryRecursively(remotePath: entry.path, to: childURL)
+            } else {
+                try await FTPClient.shared.downloadFile(named: entry.path, to: childURL)
             }
         }
     }
