@@ -180,10 +180,19 @@ struct FileBrowserView: View {
     private var fileTableView: some View {
         Table(filesTableItems, selection: $selectedFiles) {
             TableColumn("Name") { file in
-                HStack(spacing: 8) {
-                    Image(systemName: file.icon)
-                        .foregroundColor(file.isDirectory ? .blue : .secondary)
-                    Text(file.name)
+                if file.isDirectory {
+                    HStack(spacing: 8) {
+                        Image(systemName: file.icon)
+                            .foregroundColor(.blue)
+                        Text(file.name)
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Image(systemName: file.icon)
+                            .foregroundColor(.secondary)
+                        Text(file.name)
+                    }
+                    .draggable(DraggableRemoteFile(file: file))
                 }
             }
             .width(min: 200, ideal: 300)
