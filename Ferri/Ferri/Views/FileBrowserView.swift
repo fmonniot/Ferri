@@ -186,9 +186,7 @@ struct FileBrowserView: View {
                     Text(file.name)
                 }
                 .overlay {
-                    if !file.isDirectory {
-                        FilePromiseDragSource(file: file)
-                    }
+                    FilePromiseDragSource(file: file)
                 }
             }
             .width(min: 200, ideal: 300)
