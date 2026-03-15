@@ -55,9 +55,7 @@ struct MainView: View {
         }
         .onChange(of: connectionViewModel.selectedConnection) { _, newValue in
             if let connection = newValue {
-                Task {
-                    connect(to: connection)
-                }
+                connect(to: connection)
             }
         }
         .onAppear {
@@ -66,9 +64,8 @@ struct MainView: View {
     }
     
     private func connect(to server: FTPServer) {
-        connectionViewModel.setConnectionStatus(.connecting, for: server.id)
-        
         Task { @MainActor in
+            connectionViewModel.setConnectionStatus(.connecting, for: server.id)
             do {
                 try await FTPClient.shared.connect(to: server)
                 isConnected = true
