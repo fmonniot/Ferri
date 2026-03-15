@@ -1,30 +1,33 @@
 import Foundation
+import Logging
 
-enum FTPClientError: Error {
+public enum FTPClientError: Error {
     case notConnected
     case connectionFailed(String)
 }
 
-final class FTPClient: @unchecked Sendable {
-    static let shared = FTPClient()
-    
+private let logger = Logger(label: "com.ftpclient.client")
+
+public final class FTPClient: @unchecked Sendable {
+    public static let shared = FTPClient()
+
     private var client: SFTPClient?
     private var currentServer: FTPServer?
-    
-    private(set) var isConnected = false
-    private(set) var currentPath = "/"
-    
+
+    public private(set) var isConnected = false
+    public private(set) var currentPath = "/"
+
     private init() {}
-    
-    func connect(to server: FTPServer) async throws {
-        print("[FTPClient] connect(to:) called for \(server.host):\(server.port)")
-        
+
+    public func connect(to server: FTPServer) async throws {
+        logger.debug("connect(to:) called for \(server.host):\(server.port)")
+
         self.currentServer = server
-        print("[FTPClient] Creating SFTPClient for \(server.host)...")
-        
+        logger.debug("Creating SFTPClient for \(server.host)...")
+
         client = SFTPClient()
-        
-        print("[FTPClient] Starting connection...")
+
+        logger.debug("Starting connection...")
         let credentials = SFTPCredentials(
             username: server.username,
             password: server.password,
@@ -32,15 +35,15 @@ final class FTPClient: @unchecked Sendable {
             keyPassphrase: server.keyPassphrase
         )
         try await client?.connect(host: server.host, port: server.port, credentials: credentials)
-        
+
         isConnected = true
-        print("[FTPClient] Getting current directory...")
+        logger.debug("Getting current directory...")
         currentPath = await client?.currentDirectory() ?? "/"
-        print("[FTPClient] Connected! Current path: \(currentPath)")
+        logger.info("Connected! Current path: \(currentPath)")
     }
-    
-    func disconnect() {
-        print("[FTPClient] disconnect() called")
+
+    public func disconnect() {
+        logger.debug("disconnect() called")
         Task {
             try? await client?.disconnect()
         }
@@ -48,36 +51,36 @@ final class FTPClient: @unchecked Sendable {
         isConnected = false
         currentPath = "/"
     }
-    
-    func listDirectory(at path: String = "") async throws -> [RemoteFile] {
-        print("[FTPClient] listDirectory(at: \(path)) called")
+
+    public func listDirectory(at path: String = "") async throws -> [RemoteFile] {
+        logger.debug("listDirectory(at: \(path)) called")
         guard isConnected, let client = client else {
-            print("[FTPClient] Not connected!")
+            logger.info("Not connected!")
             throw FTPClientError.notConnected
         }
-        
-        print("[FTPClient] Calling client.listDirectory...")
+
+        logger.debug("Calling client.listDirectory...")
         let files = try await client.listDirectory(path: path)
-        print("[FTPClient] Got \(files.count) files")
+        logger.debug("Got \(files.count) files")
         return files
     }
-    
-    func changeDirectory(to path: String) async throws {
-        print("[FTPClient] changeDirectory(to: \(path)) called")
+
+    public func changeDirectory(to path: String) async throws {
+        logger.debug("changeDirectory(to: \(path)) called")
         guard let client = client else { throw FTPClientError.notConnected }
         try await client.changeDirectory(to: path)
         currentPath = await client.currentDirectory()
-        print("[FTPClient] Changed to: \(currentPath)")
+        logger.info("Changed to: \(currentPath)")
     }
-    
-    func goToParentDirectory() async throws {
+
+    public func goToParentDirectory() async throws {
         try await changeDirectory(to: "..")
     }
-    
-    func downloadFile(named fileName: String, to localURL: URL) async throws {
-        print("[FTPClient] downloadFile(named: \(fileName)) called")
+
+    public func downloadFile(named fileName: String, to localURL: URL) async throws {
+        logger.debug("downloadFile(named: \(fileName)) called")
         guard let client = client else { throw FTPClientError.notConnected }
-        
+
         try await client.downloadToFile(remotePath: fileName, localURL: localURL)
     }
 }
