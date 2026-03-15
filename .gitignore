@@ -3,3 +3,5 @@ xcuserdata/
 
 ## Stuff I discovered along the road
 build/
+.claude/
+**/.claude/
