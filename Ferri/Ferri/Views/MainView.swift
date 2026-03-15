@@ -55,7 +55,9 @@ struct MainView: View {
         }
         .onChange(of: connectionViewModel.selectedConnection) { _, newValue in
             if let connection = newValue {
-                connect(to: connection)
+                Task {
+                    connect(to: connection)
+                }
             }
         }
         .onAppear {
