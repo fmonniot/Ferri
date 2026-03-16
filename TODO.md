@@ -6,7 +6,11 @@ Known issue:
 - There are some thread issue with the network code, need to fix that (especially given it's the main reason I'm leaving cyberduck for)
 - Understand naming convention about actor usage (e.g. Merge FTPClient with FtpClientActor, remove the suffix, etc…
 - Have a timeout when receiving data on data channels
-
+- Downloading files is slow: 1.5MB/s instead of cyberduck 6.5MB/s
+- Still doesn't really work with folders, can wait.
+- No transfer entry in the transfer pane
+- To test once the download speed has been improved: Finder completion status icon
+- Create tests for the Ferri app (trying to understand how to make that work with no access to docker CLI in tests [App Sandbox])
 
 - AGENTS.md file.
     - Add "use xcode MCP over any CLI tool whenever you have the chance"
@@ -15,5 +19,3 @@ Known issue:
         - not a full fledge FTP server, only one use for browsing/download.
         - No support for operations that modify remote objects)
 
-
-Run unit tests from the CLI: `xcodebuild test -scheme iFTP -only-testing:iFTPUnitTests/`
