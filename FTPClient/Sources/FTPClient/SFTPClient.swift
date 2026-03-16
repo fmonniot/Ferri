@@ -297,22 +297,19 @@ public actor SFTPClient {
         currentPath
     }
 
-    /// Default timeout for file transfer operations (5 minutes per chunk).
-    /// This is intentionally much longer than the general `operationTimeout`
-    /// because large-file reads over slow connections can take significant time.
-    private let transferTimeout: TimeAmount = .seconds(300)
-
     public func downloadToFile(remotePath: String, localURL: URL, progress: ((UInt64, UInt64?) -> Void)? = nil) async throws {
         guard isConnectedFlag else {
             throw SFTPClientError.notConnected
         }
 
         let absolutePath = resolvePath(remotePath)
+        logger.info("Starting download: \(absolutePath) -> \(localURL.lastPathComponent)")
 
         let handle = try await openFile(path: absolutePath, flags: 0x00000001)
 
         let fileAttrs = try await fstatHandle(handle)
         let totalSize = fileAttrs.size
+        logger.info("File size: \(totalSize.map { "\($0) bytes" } ?? "unknown")")
 
         FileManager.default.createFile(atPath: localURL.path, contents: nil)
         let fileHandle = try FileHandle(forWritingTo: localURL)
@@ -322,7 +319,7 @@ public actor SFTPClient {
             let chunkSize: UInt32 = 32768
 
             while true {
-                let data = try await readFromHandle(handle: handle, offset: offset, length: chunkSize, timeout: transferTimeout)
+                let data = try await readFromHandle(handle: handle, offset: offset, length: chunkSize)
 
                 if data.readableBytes == 0 {
                     break
@@ -336,6 +333,7 @@ public actor SFTPClient {
                 progress?(offset, totalSize)
             }
 
+            logger.info("Download complete: \(absolutePath) (\(offset) bytes)")
             try fileHandle.close()
         }
 
@@ -357,7 +355,7 @@ public actor SFTPClient {
             let chunkSize: UInt32 = 32768
 
             while true {
-                let buffer = try await readFromHandle(handle: handle, offset: offset, length: chunkSize, timeout: transferTimeout)
+                let buffer = try await readFromHandle(handle: handle, offset: offset, length: chunkSize)
                 if buffer.readableBytes == 0 { break }
                 if let bytes = buffer.getBytes(at: 0, length: buffer.readableBytes) {
                     result.append(contentsOf: bytes)
@@ -751,6 +749,12 @@ final class SFTPChannelHandler: ChannelInboundHandler, RemovableChannelHandler, 
     private weak var client: SFTPClient?
     private let sftpProtocol: SFTPProtocol
 
+    /// Accumulation buffer for partial SFTP messages that span multiple
+    /// channelRead calls. SSH channel data is a byte stream, so a single
+    /// SFTP response (especially large SSH_FXP_DATA payloads) can arrive
+    /// across multiple reads.
+    private var accumulationBuffer = ByteBuffer()
+
     init(client: SFTPClient, protocol_: SFTPProtocol) {
         self.client = client
         self.sftpProtocol = protocol_
@@ -764,11 +768,16 @@ final class SFTPChannelHandler: ChannelInboundHandler, RemovableChannelHandler, 
 
         logger.debug("Received \(buffer.readableBytes) bytes")
 
+        // Append incoming bytes to the accumulation buffer.
+        accumulationBuffer.writeBuffer(&buffer)
+
         guard let client = client else { return }
 
         do {
-            while buffer.readableBytes > 0 {
-                guard let (id, response) = try sftpProtocol.decodeResponse(&buffer) else {
+            while accumulationBuffer.readableBytes > 0 {
+                guard let (id, response) = try sftpProtocol.decodeResponse(&accumulationBuffer) else {
+                    // Incomplete message — wait for more data in a future channelRead.
+                    logger.debug("Partial SFTP message buffered (\(accumulationBuffer.readableBytes) bytes waiting)")
                     break
                 }
                 logger.debug("Decoded response for request \(id)")
@@ -779,6 +788,9 @@ final class SFTPChannelHandler: ChannelInboundHandler, RemovableChannelHandler, 
         } catch {
             logger.error("Error decoding response: \(error)")
         }
+
+        // Compact the buffer to reclaim already-read bytes.
+        accumulationBuffer.discardReadBytes()
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
