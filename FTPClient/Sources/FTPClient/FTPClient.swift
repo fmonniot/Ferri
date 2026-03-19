@@ -8,7 +8,7 @@ public enum FTPClientError: Error {
 
 private let logger = Logger(label: "com.ftpclient.client")
 
-public final class FTPClient: @unchecked Sendable {
+public final class FTPClient: FTPClientProtocol, @unchecked Sendable {
     public static let shared = FTPClient()
 
     private var client: SFTPClient?

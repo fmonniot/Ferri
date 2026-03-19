@@ -843,6 +843,151 @@ struct SFTPIntegrationTests {
 
         try await client.disconnect()
     }
+
+    @Test
+    func downloadFileWithProgress() async throws {
+        guard SFTPIntegrationTests.isDockerAvailable() else {
+            print("[SFTPTest] Docker not available, skipping test")
+            return
+        }
+
+        if !SFTPIntegrationTests.isServerRunning {
+            try SFTPIntegrationTests.startServer()
+        }
+
+        // Create a test file with known content
+        let containerFilePath = "/home/testuser/upload/progress_test.txt"
+        let remoteFilePath = "/upload/progress_test.txt"
+        // Create a file large enough to produce at least one progress callback (>32KB)
+        SFTPIntegrationTests.dockerExec(["bash", "-c", "dd if=/dev/urandom of=\(containerFilePath) bs=1024 count=128 2>/dev/null"])
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let testFileName = "progress_download_\(UUID().uuidString.prefix(8)).bin"
+        let testFileURL = tempDir.appendingPathComponent(testFileName)
+
+        let client = makeClient()
+        try await connectClient(client)
+
+        var progressUpdates: [(UInt64, UInt64?)] = []
+
+        do {
+            try await client.downloadToFile(
+                remotePath: remoteFilePath,
+                localURL: testFileURL,
+                progress: { bytesRead, totalSize in
+                    progressUpdates.append((bytesRead, totalSize))
+                }
+            )
+
+            #expect(FileManager.default.fileExists(atPath: testFileURL.path))
+
+            // Progress should have been called at least once
+            #expect(!progressUpdates.isEmpty)
+
+            // The last progress update's bytesRead should match the file size
+            let attrs = try FileManager.default.attributesOfItem(atPath: testFileURL.path)
+            let fileSize = attrs[.size] as? UInt64 ?? 0
+            #expect(fileSize > 0)
+        } catch {
+            try? FileManager.default.removeItem(at: testFileURL)
+            try await client.disconnect()
+            throw error
+        }
+
+        try? FileManager.default.removeItem(at: testFileURL)
+        try await client.disconnect()
+    }
+
+    @Test
+    func downloadNonExistentFile() async throws {
+        guard SFTPIntegrationTests.isDockerAvailable() else {
+            print("[SFTPTest] Docker not available, skipping test")
+            return
+        }
+
+        if !SFTPIntegrationTests.isServerRunning {
+            try SFTPIntegrationTests.startServer()
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let testFileName = "nonexistent_download_\(UUID().uuidString.prefix(8)).txt"
+        let testFileURL = tempDir.appendingPathComponent(testFileName)
+
+        let client = makeClient()
+        try await connectClient(client)
+
+        do {
+            try await client.downloadToFile(
+                remotePath: "/upload/this_file_does_not_exist_\(UUID().uuidString).txt",
+                localURL: testFileURL
+            )
+            Issue.record("Expected download of non-existent file to throw")
+        } catch {
+            // Expected — the server should return an error for a missing file
+        }
+
+        try? FileManager.default.removeItem(at: testFileURL)
+        try await client.disconnect()
+    }
+
+    @Test
+    func downloadDirectoryRecursively() async throws {
+        guard SFTPIntegrationTests.isDockerAvailable() else {
+            print("[SFTPTest] Docker not available, skipping test")
+            return
+        }
+
+        if !SFTPIntegrationTests.isServerRunning {
+            try SFTPIntegrationTests.startServer()
+        }
+
+        // Create a nested directory structure inside the container
+        let basePath = "/home/testuser/upload/nested_test"
+        SFTPIntegrationTests.dockerExec(["bash", "-c", "mkdir -p \(basePath)/subdir"])
+        SFTPIntegrationTests.dockerExec(["bash", "-c", "echo 'root file' > \(basePath)/root.txt"])
+        SFTPIntegrationTests.dockerExec(["bash", "-c", "echo 'sub file' > \(basePath)/subdir/child.txt"])
+
+        let client = makeClient()
+        try await connectClient(client)
+
+        do {
+            // List the nested directory
+            let entries = try await client.listDirectory(path: "/upload/nested_test")
+            #expect(entries.count == 2)
+
+            let hasRootFile = entries.contains { $0.name == "root.txt" && !$0.isDirectory }
+            let hasSubdir = entries.contains { $0.name == "subdir" && $0.isDirectory }
+            #expect(hasRootFile)
+            #expect(hasSubdir)
+
+            // List the subdirectory
+            let subEntries = try await client.listDirectory(path: "/upload/nested_test/subdir")
+            let hasChildFile = subEntries.contains { $0.name == "child.txt" && !$0.isDirectory }
+            #expect(hasChildFile)
+
+            // Download the root file and verify contents
+            let tempDir = FileManager.default.temporaryDirectory
+            let rootFileURL = tempDir.appendingPathComponent("recursive_root_\(UUID().uuidString.prefix(8)).txt")
+            defer { try? FileManager.default.removeItem(at: rootFileURL) }
+
+            try await client.downloadToFile(remotePath: "/upload/nested_test/root.txt", localURL: rootFileURL)
+            let rootContent = try String(contentsOf: rootFileURL, encoding: .utf8)
+            #expect(rootContent.trimmingCharacters(in: .whitespacesAndNewlines) == "root file")
+
+            // Download the child file and verify contents
+            let childFileURL = tempDir.appendingPathComponent("recursive_child_\(UUID().uuidString.prefix(8)).txt")
+            defer { try? FileManager.default.removeItem(at: childFileURL) }
+
+            try await client.downloadToFile(remotePath: "/upload/nested_test/subdir/child.txt", localURL: childFileURL)
+            let childContent = try String(contentsOf: childFileURL, encoding: .utf8)
+            #expect(childContent.trimmingCharacters(in: .whitespacesAndNewlines) == "sub file")
+        } catch {
+            try await client.disconnect()
+            throw error
+        }
+
+        try await client.disconnect()
+    }
 }
 
 // MARK: - Shared error type

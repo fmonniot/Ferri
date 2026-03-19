@@ -11,6 +11,7 @@ Known issue:
 - No transfer entry in the transfer pane
 - To test once the download speed has been improved: Finder completion status icon
 - Create tests for the Ferri app (trying to understand how to make that work with no access to docker CLI in tests [App Sandbox])
+- Use VSplitView instead of VStack for the transfer/file browser division
 
 - AGENTS.md file.
     - Add "use xcode MCP over any CLI tool whenever you have the chance"

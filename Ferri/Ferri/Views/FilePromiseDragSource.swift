@@ -23,6 +23,7 @@ struct FilePromiseInfo {
 class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProviderDelegate {
 
     var remoteFile: RemoteFile?
+    var ftpClient: any FTPClientProtocol = FTPClient.shared
 
     private var dragOrigin: NSPoint?
     private static let dragThreshold: CGFloat = 3.0
@@ -106,7 +107,7 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
                 if file.isDirectory {
                     try await downloadDirectoryRecursively(remotePath: file.path, to: url)
                 } else {
-                    try await FTPClient.shared.downloadFile(named: file.path, to: url)
+                    try await ftpClient.downloadFile(named: file.path, to: url)
                 }
                 logger.info("Promise fulfilled successfully: \(file.name)")
                 completionHandler(nil)
@@ -125,7 +126,7 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         logger.debug("Creating local directory: \(localURL.path)")
         try FileManager.default.createDirectory(at: localURL, withIntermediateDirectories: true)
 
-        let entries = try await FTPClient.shared.listDirectory(at: remotePath)
+        let entries = try await ftpClient.listDirectory(at: remotePath)
         logger.info("Listed \(entries.count) entries in \(remotePath)")
 
         for entry in entries {
@@ -134,7 +135,7 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
                 try await downloadDirectoryRecursively(remotePath: entry.path, to: childURL)
             } else {
                 logger.debug("Downloading file: \(entry.path) -> \(childURL.path)")
-                try await FTPClient.shared.downloadFile(named: entry.path, to: childURL)
+                try await ftpClient.downloadFile(named: entry.path, to: childURL)
                 logger.debug("Downloaded: \(entry.name)")
             }
         }
@@ -165,14 +166,17 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
 
 struct FilePromiseDragSource: NSViewRepresentable {
     let file: RemoteFile
+    var ftpClient: any FTPClientProtocol = FTPClient.shared
 
     func makeNSView(context: Context) -> FilePromiseDragSourceView {
         let view = FilePromiseDragSourceView()
         view.remoteFile = file
+        view.ftpClient = ftpClient
         return view
     }
 
     func updateNSView(_ nsView: FilePromiseDragSourceView, context: Context) {
         nsView.remoteFile = file
+        nsView.ftpClient = ftpClient
     }
 }
