@@ -297,7 +297,7 @@ public actor SFTPClient {
         currentPath
     }
 
-    public func downloadToFile(remotePath: String, localURL: URL, progress: ((UInt64, UInt64?) -> Void)? = nil) async throws {
+    public func downloadToFile(remotePath: String, localURL: URL, progress: (@Sendable (UInt64, UInt64?) -> Void)? = nil) async throws {
         guard isConnectedFlag else {
             throw SFTPClientError.notConnected
         }

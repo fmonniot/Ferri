@@ -537,7 +537,7 @@ struct SFTPIntegrationTests {
         process.executableURL = URL(fileURLWithPath: dockerPath)
         // atmoz/sftp expects "user:password:::upload" format to pre-create upload directory
         process.arguments = [
-            "run", "-d",
+            "run", "-d", "--rm",
             "--name", containerName,
             "-p", "\(serverPort):22",
             "--platform", "linux/amd64",
@@ -567,19 +567,26 @@ struct SFTPIntegrationTests {
             checkProcess.waitUntilExit()
 
             if checkProcess.terminationStatus == 0 {
-                // Also try to connect via TCP to ensure SSH is ready
+                // Try an actual SSH banner exchange, not just TCP connect.
+                // sshd sends its version banner (e.g. "SSH-2.0-OpenSSH_9.6")
+                // only after it's fully initialized. Reading this banner is
+                // the most reliable readiness signal.
                 let tcpCheck = Process()
                 tcpCheck.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
-                tcpCheck.arguments = ["-z", "-w", "1", "localhost", "\(serverPort)"]
-                tcpCheck.standardOutput = FileHandle.nullDevice
+                tcpCheck.arguments = ["-w", "2", "localhost", "\(serverPort)"]
+                let bannerPipe = Pipe()
+                tcpCheck.standardOutput = bannerPipe
                 tcpCheck.standardError = FileHandle.nullDevice
+                // Close stdin so nc doesn't hang waiting for input
+                tcpCheck.standardInput = FileHandle.nullDevice
                 try? tcpCheck.run()
                 tcpCheck.waitUntilExit()
 
-                if tcpCheck.terminationStatus == 0 {
-                    // SSH port is open, but sshd may still be initializing.
-                    // Give it extra time to be fully ready for connections.
-                    Thread.sleep(forTimeInterval: 3.0)
+                let bannerData = bannerPipe.fileHandleForReading.readDataToEndOfFile()
+                let banner = String(data: bannerData, encoding: .utf8) ?? ""
+
+                if banner.hasPrefix("SSH-") {
+                    // sshd is fully ready and sending its banner
                     started = true
                     break
                 }
@@ -595,6 +602,12 @@ struct SFTPIntegrationTests {
 
         _isServerRunning = true
         print("[SFTPTest] Server started on port \(serverPort)")
+
+        // Register cleanup so the container is removed when the test process
+        // exits — whether tests pass, fail, or are interrupted.
+        atexit {
+            SFTPIntegrationTests.stopServer()
+        }
     }
 
     static func stopServer() {
@@ -868,7 +881,7 @@ struct SFTPIntegrationTests {
         let client = makeClient()
         try await connectClient(client)
 
-        var progressUpdates: [(UInt64, UInt64?)] = []
+        nonisolated(unsafe) var progressUpdates: [(UInt64, UInt64?)] = []
 
         do {
             try await client.downloadToFile(
@@ -987,6 +1000,81 @@ struct SFTPIntegrationTests {
         }
 
         try await client.disconnect()
+    }
+
+    // MARK: - Performance
+
+    @Test
+    func downloadThroughput() async throws {
+        guard SFTPIntegrationTests.isDockerAvailable() else {
+            print("[SFTPTest] Docker not available, skipping test")
+            return
+        }
+
+        if !SFTPIntegrationTests.isServerRunning {
+            try SFTPIntegrationTests.startServer()
+        }
+
+        // Create a 10MB file in the container — large enough to exercise the
+        // chunked read loop meaningfully, small enough to not slow down the suite.
+        let sizeMB = 10
+        let containerPath = "/home/testuser/upload/perf_test.bin"
+        let remotePath = "/upload/perf_test.bin"
+        SFTPIntegrationTests.dockerExec([
+            "bash", "-c",
+            "dd if=/dev/urandom of=\(containerPath) bs=1048576 count=\(sizeMB) 2>/dev/null"
+        ])
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("perf_\(UUID().uuidString.prefix(8)).bin")
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let client = makeClient()
+        try await connectClient(client)
+
+        nonisolated(unsafe) var lastBytesRead: UInt64 = 0
+        let clock = ContinuousClock()
+
+        let elapsed = try await clock.measure {
+            try await client.downloadToFile(
+                remotePath: remotePath,
+                localURL: tempURL,
+                progress: { bytesRead, _ in lastBytesRead = bytesRead }
+            )
+        }
+
+        try await client.disconnect()
+
+        // Verify the file was fully downloaded
+        let attrs = try FileManager.default.attributesOfItem(atPath: tempURL.path)
+        let fileSize = attrs[.size] as? UInt64 ?? 0
+        let expectedSize = UInt64(sizeMB * 1048576)
+        #expect(fileSize == expectedSize)
+
+        // Calculate throughput
+        let seconds = Double(elapsed.components.seconds)
+            + Double(elapsed.components.attoseconds) / 1e18
+        let mbPerSecond = Double(fileSize) / (1048576.0 * seconds)
+
+        print("[Perf] Downloaded \(sizeMB)MB in \(String(format: "%.2f", seconds))s")
+        print("[Perf] Throughput: \(String(format: "%.1f", mbPerSecond)) MB/s")
+        print("[Perf] Last progress bytesRead: \(lastBytesRead)")
+
+        // Local Docker SFTP typically achieves 50-200+ MB/s. A 5 MB/s floor
+        // catches genuine regressions (broken chunking, accidental single-byte
+        // reads) without flaking on CI under load. Tune if needed.
+        #expect(mbPerSecond > 5.0, "Throughput fell below 5 MB/s baseline")
+
+        // NOTE on memory regression testing:
+        // To guard against someone accidentally buffering the entire file in RAM
+        // (instead of streaming 32KB chunks to disk), you could sample resident
+        // memory via task_info(mach_task_self_, MACH_TASK_BASIC_INFO, ...) before
+        // and after the download, then assert the delta stays under ~2x the chunk
+        // size (64KB). This catches the case where downloadToFile accumulates a
+        // Data buffer instead of writing through a FileHandle. Not implemented
+        // here because it adds platform-specific mach API usage and the current
+        // implementation clearly streams — but worth adding if the download path
+        // is ever refactored.
     }
 }
 
