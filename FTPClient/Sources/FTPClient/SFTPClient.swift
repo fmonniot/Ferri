@@ -65,7 +65,7 @@ public actor SFTPClient {
 
     var operationTimeout: TimeAmount = .seconds(30)
 
-    private var timeoutTask: Task<Void, Never>?
+    private var timeoutTasks: [UInt32: Task<Void, Never>] = [:]
 
     public init() {}
 
@@ -315,13 +315,62 @@ public actor SFTPClient {
         let fileHandle = try FileHandle(forWritingTo: localURL)
 
         do {
-            var offset: UInt64 = 0
-            let chunkSize: UInt32 = 32768
+            // Use 64KB chunks — the practical max for SFTP v3. Most servers
+            // accept this; OpenSSH has used 64KB since ~2013.
+            let chunkSize: UInt32 = 65536
+            // Pipeline up to 16 read requests so the server can fill the TCP
+            // window while we process earlier chunks. This turns the bottleneck
+            // from 1 RTT per chunk into ~1 RTT per 16 chunks.
+            let maxInFlight = 16
 
-            while true {
-                let data = try await readFromHandle(handle: handle, offset: offset, length: chunkSize)
+            var nextOffset: UInt64 = 0
+            var bytesWritten: UInt64 = 0
+            var eof = false
+
+            // Pending futures in submission order so we write sequentially.
+            var pipeline: [(offset: UInt64, task: Task<ByteBuffer, Error>)] = []
+
+            while !eof || !pipeline.isEmpty {
+                // Fill the pipeline up to maxInFlight requests.
+                while !eof && pipeline.count < maxInFlight {
+                    let readOffset = nextOffset
+                    let readHandle = handle
+                    let readLength = chunkSize
+                    let task = Task<ByteBuffer, Error> {
+                        try await self.readFromHandle(
+                            handle: readHandle,
+                            offset: readOffset,
+                            length: readLength
+                        )
+                    }
+                    pipeline.append((offset: readOffset, task: task))
+                    nextOffset += UInt64(chunkSize)
+
+                    // If we know the file size, stop submitting past the end.
+                    if let total = totalSize, nextOffset >= total {
+                        eof = true
+                    }
+                }
+
+                // Drain the oldest response — this preserves write order.
+                guard let (_, task) = pipeline.first else { break }
+                pipeline.removeFirst()
+
+                let data: ByteBuffer
+                do {
+                    data = try await task.value
+                } catch {
+                    // Cancel remaining in-flight reads on error.
+                    for (_, t) in pipeline { t.cancel() }
+                    pipeline.removeAll()
+                    throw error
+                }
 
                 if data.readableBytes == 0 {
+                    // EOF — cancel any remaining requests we speculatively issued.
+                    eof = true
+                    for (_, t) in pipeline { t.cancel() }
+                    pipeline.removeAll()
                     break
                 }
 
@@ -329,11 +378,17 @@ public actor SFTPClient {
                     try fileHandle.write(contentsOf: bytes)
                 }
 
-                offset += UInt64(data.readableBytes)
-                progress?(offset, totalSize)
+                bytesWritten += UInt64(data.readableBytes)
+                progress?(bytesWritten, totalSize)
+
+                // If the server returned less than we asked for and we don't
+                // know the total size, treat it as a signal that EOF is near.
+                if data.readableBytes < Int(chunkSize) {
+                    eof = true
+                }
             }
 
-            logger.info("Download complete: \(absolutePath) (\(offset) bytes)")
+            logger.info("Download complete: \(absolutePath) (\(bytesWritten) bytes)")
             try fileHandle.close()
         }
 
@@ -352,7 +407,7 @@ public actor SFTPClient {
         var result = Data()
         do {
             var offset: UInt64 = 0
-            let chunkSize: UInt32 = 32768
+            let chunkSize: UInt32 = 65536
 
             while true {
                 let buffer = try await readFromHandle(handle: handle, offset: offset, length: chunkSize)
@@ -386,8 +441,8 @@ public actor SFTPClient {
         }
 
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<SFTPResponse, Error>) in
-            // Kick off a timeout that cancels the pending request if it hasn't been served.
-            self.timeoutTask = Task { [weak self] in
+            // Kick off a per-request timeout that cancels the pending request if it hasn't been served.
+            self.timeoutTasks[requestId] = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(effectiveTimeout.nanoseconds))
                 await self?.timeoutIfPending(requestId: requestId, continuation: continuation)
             }
@@ -414,8 +469,7 @@ public actor SFTPClient {
 
     /// Called by the channel write failure handler to fail the pending request and tidy state.
     func cancelRequest(id: UInt32, error: Error) {
-        timeoutTask?.cancel()
-        timeoutTask = nil
+        timeoutTasks.removeValue(forKey: id)?.cancel()
         guard let continuation = pendingRequests.removeValue(forKey: id) else { return }
         logger.error("Write failed: \(error)")
         continuation.resume(throwing: error)
@@ -440,8 +494,7 @@ public actor SFTPClient {
     /// Called from SFTPChannelHandler (via a Task) when a complete response has been decoded.
     func handleResponse(_ response: SFTPResponse, requestId: UInt32) {
         logger.debug("Received response for request \(requestId)")
-        timeoutTask?.cancel()
-        timeoutTask = nil
+        timeoutTasks.removeValue(forKey: requestId)?.cancel()
         let continuation = pendingRequests.removeValue(forKey: requestId)
         continuation?.resume(returning: response)
     }
