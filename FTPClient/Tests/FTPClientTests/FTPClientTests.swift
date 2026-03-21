@@ -445,28 +445,27 @@ struct RemoteFileTests {
     }
 }
 
-// MARK: - Integration Tests (Docker-based)
+// MARK: - Integration Tests (Docker Compose)
+//
+// Prerequisites:
+//   cd FTPClient && docker compose up -d
+//
+// Services (fixed ports):
+//   sftp       – localhost:2222  (direct SFTP, no latency)
+//   toxiproxy  – localhost:2223  (SFTP via proxy, latency injectable)
+//                localhost:8474  (toxiproxy REST API)
 
+@Suite(.serialized)
 struct SFTPIntegrationTests {
 
-    static nonisolated(unsafe) var serverPort: Int = 0
-    static nonisolated(unsafe) var serverUsername = "testuser"
-    static nonisolated(unsafe) var serverPassword = "testpass123"
-    static nonisolated(unsafe) var containerName: String = ""
-    private static let serverLock = NSLock()
-    private static nonisolated(unsafe) var _isServerRunning = false
+    // Fixed ports from docker-compose.yml
+    static let directPort = 2222
+    static let proxyPort = 2223
+    static let toxiproxyAPIPort = 8474
+    static let username = "testuser"
+    static let password = "testpass123"
 
-    static var isServerRunning: Bool {
-        serverLock.lock()
-        defer { serverLock.unlock() }
-        return _isServerRunning
-    }
-
-    private static func setServerRunning(_ value: Bool) {
-        serverLock.lock()
-        defer { serverLock.unlock() }
-        _isServerRunning = value
-    }
+    // MARK: - Helpers
 
     static func dockerPath() -> String {
         let paths = ["/opt/homebrew/bin/docker", "/usr/local/bin/docker", "/usr/bin/docker"]
@@ -478,178 +477,66 @@ struct SFTPIntegrationTests {
         return "/usr/local/bin/docker"
     }
 
-    static func isDockerAvailable() -> Bool {
-        let path = dockerPath()
-        print(path)
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: path)
-        process.arguments = ["version"]
-
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-
-            let success = process.terminationStatus == 0
-
-            if success {
-                return true
-            } else {
-                let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-
-                let standardOutput = String(data: outputData, encoding: .utf8)
-                let standardError = String(data: errorData, encoding: .utf8)
-
-                print("status: \(process.terminationStatus)")
-                print("stdout: \(standardOutput ?? "<none>")")
-                print("stderr: \(standardError ?? "<none>")")
-
-                return false
-            }
-        } catch {
-            print(error)
-            return false
-        }
+    /// Check whether the compose stack is running by probing the SFTP port.
+    static func isComposeRunning() -> Bool {
+        let nc = Process()
+        nc.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
+        nc.arguments = ["-z", "-w", "2", "localhost", "\(directPort)"]
+        nc.standardOutput = FileHandle.nullDevice
+        nc.standardError = FileHandle.nullDevice
+        try? nc.run()
+        nc.waitUntilExit()
+        return nc.terminationStatus == 0
     }
 
-    static func findAvailablePort() -> Int {
-        return Int.random(in: 10000...60000)
-    }
-
-    static func startServer() throws {
-        serverLock.lock()
-        defer { serverLock.unlock() }
-
-        guard !_isServerRunning else { return }
-
-        serverPort = findAvailablePort()
-        containerName = "sftp-test-\(UUID().uuidString.prefix(8))"
-
-        let dockerPath = dockerPath()
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: dockerPath)
-        // atmoz/sftp expects "user:password:::upload" format to pre-create upload directory
-        process.arguments = [
-            "run", "-d", "--rm",
-            "--name", containerName,
-            "-p", "\(serverPort):22",
-            "--platform", "linux/amd64",
-            "atmoz/sftp:latest",
-            "\(serverUsername):\(serverPassword):::upload"
-        ]
-
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            throw SFTPTestError.serverStartFailed("Docker exit code: \(process.terminationStatus)")
-        }
-
-        // Wait for SSHD to be listening inside the container
-        var started = false
-        for attempt in 0..<30 {
-            // Check that sshd is actually listening on port 22 (not just that the container runs)
-            let checkProcess = Process()
-            checkProcess.executableURL = URL(fileURLWithPath: dockerPath)
-            checkProcess.arguments = ["exec", containerName, "bash", "-c", "cat /proc/1/cmdline 2>/dev/null || echo starting"]
-            let pipe = Pipe()
-            checkProcess.standardOutput = pipe
-            checkProcess.standardError = FileHandle.nullDevice
-
-            try? checkProcess.run()
-            checkProcess.waitUntilExit()
-
-            if checkProcess.terminationStatus == 0 {
-                // Try an actual SSH banner exchange, not just TCP connect.
-                // sshd sends its version banner (e.g. "SSH-2.0-OpenSSH_9.6")
-                // only after it's fully initialized. Reading this banner is
-                // the most reliable readiness signal.
-                let tcpCheck = Process()
-                tcpCheck.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
-                tcpCheck.arguments = ["-w", "2", "localhost", "\(serverPort)"]
-                let bannerPipe = Pipe()
-                tcpCheck.standardOutput = bannerPipe
-                tcpCheck.standardError = FileHandle.nullDevice
-                // Close stdin so nc doesn't hang waiting for input
-                tcpCheck.standardInput = FileHandle.nullDevice
-                try? tcpCheck.run()
-                tcpCheck.waitUntilExit()
-
-                let bannerData = bannerPipe.fileHandleForReading.readDataToEndOfFile()
-                let banner = String(data: bannerData, encoding: .utf8) ?? ""
-
-                if banner.hasPrefix("SSH-") {
-                    // sshd is fully ready and sending its banner
-                    started = true
-                    break
-                }
-            }
-
-            print("[SFTPTest] Waiting for server... (attempt \(attempt + 1))")
-            Thread.sleep(forTimeInterval: 1.0)
-        }
-
-        guard started else {
-            throw SFTPTestError.serverStartFailed("Server did not start in time")
-        }
-
-        _isServerRunning = true
-        print("[SFTPTest] Server started on port \(serverPort)")
-
-        // Register cleanup so the container is removed when the test process
-        // exits — whether tests pass, fail, or are interrupted.
-        atexit {
-            SFTPIntegrationTests.stopServer()
-        }
-    }
-
-    static func stopServer() {
-        serverLock.lock()
-        let currentContainerName = containerName
-        let dockerPath = dockerPath()
-        serverLock.unlock()
-
-        guard !currentContainerName.isEmpty else { return }
-
-        let stopProcess = Process()
-        stopProcess.executableURL = URL(fileURLWithPath: dockerPath)
-        stopProcess.arguments = ["stop", currentContainerName]
-        try? stopProcess.run()
-        stopProcess.waitUntilExit()
-
-        let rmProcess = Process()
-        rmProcess.executableURL = URL(fileURLWithPath: dockerPath)
-        rmProcess.arguments = ["rm", "-f", currentContainerName]
-        try? rmProcess.run()
-        rmProcess.waitUntilExit()
-
-        serverLock.lock()
-        _isServerRunning = false
-        containerName = ""
-        serverPort = 0
-        serverLock.unlock()
-
-        print("[SFTPTest] Server stopped")
-    }
-
-    /// Run a command inside the test container and return its exit code.
+    /// Run a command inside the sftp container via `docker compose exec`.
     @discardableResult
-    static func dockerExec(_ args: [String]) -> Int32 {
+    static func composeExec(_ args: [String]) -> Int32 {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: dockerPath())
-        process.arguments = ["exec", containerName] + args
+        process.arguments = ["compose", "exec", "-T", "sftp"] + args
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
+        // Run from the FTPClient directory where docker-compose.yml lives
+        process.currentDirectoryURL = composeDirURL()
         try? process.run()
         process.waitUntilExit()
         return process.terminationStatus
+    }
+
+    /// URL of the FTPClient package directory (where docker-compose.yml lives).
+    private static func composeDirURL() -> URL {
+        // The test bundle is inside FTPClient/.build/… — walk up to the package root.
+        // Alternatively, use #file to locate the source tree.
+        let thisFile = URL(fileURLWithPath: #filePath)
+        // .../FTPClient/Tests/FTPClientTests/FTPClientTests.swift
+        // → .../FTPClient
+        return thisFile
+            .deletingLastPathComponent()  // FTPClientTests/
+            .deletingLastPathComponent()  // Tests/
+            .deletingLastPathComponent()  // FTPClient/
+    }
+
+    private func skipUnlessCompose() throws {
+        guard SFTPIntegrationTests.isComposeRunning() else {
+            print("[SFTPTest] Compose stack not running (docker compose up -d). Skipping.")
+            throw SFTPTestError.serverNotRunning
+        }
+    }
+
+    private func makeClient() -> SFTPClient { SFTPClient() }
+
+    private func connectClient(_ client: SFTPClient, port: Int = directPort) async throws {
+        try await client.connect(
+            host: "localhost",
+            port: port,
+            credentials: SFTPCredentials(
+                username: SFTPIntegrationTests.username,
+                password: SFTPIntegrationTests.password,
+                privateKeyPath: nil,
+                keyPassphrase: nil
+            )
+        )
     }
 
     func withTimeout<T: Sendable>(
@@ -676,45 +563,67 @@ struct SFTPIntegrationTests {
         }
     }
 
-    private func makeClient() -> SFTPClient { SFTPClient() }
+    // MARK: - Toxiproxy helpers
 
-    private func connectClient(_ client: SFTPClient) async throws {
-        try await client.connect(
-            host: "localhost",
-            port: SFTPIntegrationTests.serverPort,
-            credentials: SFTPCredentials(
-                username: SFTPIntegrationTests.serverUsername,
-                password: SFTPIntegrationTests.serverPassword,
-                privateKeyPath: nil,
-                keyPassphrase: nil
-            )
-        )
+    /// Add a toxic to the "sftp" proxy via the toxiproxy REST API.
+    /// Returns the toxic name so it can be removed later.
+    @discardableResult
+    static func addToxic(name: String, type: String, attributes: [String: Any], stream: String = "downstream") throws -> String {
+        let url = URL(string: "http://localhost:\(toxiproxyAPIPort)/proxies/sftp/toxics")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "name": name,
+            "type": type,
+            "stream": stream,
+            "attributes": attributes
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let sem = DispatchSemaphore(value: 0)
+        var responseError: Error?
+        var responseData: Data?
+
+        let task = URLSession.shared.dataTask(with: request) { data, _, error in
+            responseData = data
+            responseError = error
+            sem.signal()
+        }
+        task.resume()
+        sem.wait()
+
+        if let error = responseError {
+            throw error
+        }
+
+        return name
     }
+
+    /// Remove a toxic by name.
+    static func removeToxic(name: String) {
+        let url = URL(string: "http://localhost:\(toxiproxyAPIPort)/proxies/sftp/toxics/\(name)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+
+        let sem = DispatchSemaphore(value: 0)
+        let task = URLSession.shared.dataTask(with: request) { _, _, _ in
+            sem.signal()
+        }
+        task.resume()
+        sem.wait()
+    }
+
+    // MARK: - Tests
 
     @Test
     func connectWithPassword() async throws {
-        guard SFTPIntegrationTests.isDockerAvailable() else {
-            print("[SFTPTest] Docker not available, skipping test")
-            return
-        }
-
-        if !SFTPIntegrationTests.isServerRunning {
-            try SFTPIntegrationTests.startServer()
-        }
+        try skipUnlessCompose()
 
         try await withTimeout(30) {
             let client = SFTPClient()
-
-            try await client.connect(
-                host: "localhost",
-                port: SFTPIntegrationTests.serverPort,
-                credentials: SFTPCredentials(
-                    username: SFTPIntegrationTests.serverUsername,
-                    password: SFTPIntegrationTests.serverPassword,
-                    privateKeyPath: nil,
-                    keyPassphrase: nil
-                )
-            )
+            try await self.connectClient(client)
 
             #expect(client.isConnected == true)
 
@@ -728,14 +637,7 @@ struct SFTPIntegrationTests {
 
     @Test
     func listDirectory() async throws {
-        guard SFTPIntegrationTests.isDockerAvailable() else {
-            print("[SFTPTest] Docker not available, skipping test")
-            return
-        }
-
-        if !SFTPIntegrationTests.isServerRunning {
-            try SFTPIntegrationTests.startServer()
-        }
+        try skipUnlessCompose()
 
         let client = makeClient()
         try await connectClient(client)
@@ -753,20 +655,12 @@ struct SFTPIntegrationTests {
 
     @Test
     func downloadFile() async throws {
-        guard SFTPIntegrationTests.isDockerAvailable() else {
-            print("[SFTPTest] Docker not available, skipping test")
-            return
-        }
+        try skipUnlessCompose()
 
-        if !SFTPIntegrationTests.isServerRunning {
-            try SFTPIntegrationTests.startServer()
-        }
-
-        // Create a test file inside the container before downloading it.
-        // dockerExec uses real container paths (outside chroot), SFTP uses chrooted paths
+        // Create a test file inside the container
         let containerFilePath = "/home/testuser/upload/testfile.txt"
         let remoteFilePath = "/upload/testfile.txt"
-        SFTPIntegrationTests.dockerExec(["bash", "-c", "echo 'hello world' > \(containerFilePath)"])
+        SFTPIntegrationTests.composeExec(["bash", "-c", "echo 'hello world' > \(containerFilePath)"])
 
         let tempDir = FileManager.default.temporaryDirectory
         let testFileName = "test_download_\(UUID().uuidString.prefix(8)).txt"
@@ -798,21 +692,12 @@ struct SFTPIntegrationTests {
 
     @Test
     func readFileData() async throws {
-        guard SFTPIntegrationTests.isDockerAvailable() else {
-            print("[SFTPTest] Docker not available, skipping test")
-            return
-        }
+        try skipUnlessCompose()
 
-        if !SFTPIntegrationTests.isServerRunning {
-            try SFTPIntegrationTests.startServer()
-        }
-
-        // Create a known file inside the container.
-        // dockerExec uses real container paths (outside chroot), SFTP uses chrooted paths
         let containerFilePath = "/home/testuser/upload/readtest.txt"
         let remoteFilePath = "/upload/readtest.txt"
         let expectedContent = "hello from readFileData"
-        SFTPIntegrationTests.dockerExec(["bash", "-c", "echo -n '\(expectedContent)' > \(containerFilePath)"])
+        SFTPIntegrationTests.composeExec(["bash", "-c", "echo -n '\(expectedContent)' > \(containerFilePath)"])
 
         let client = makeClient()
         try await connectClient(client)
@@ -831,14 +716,7 @@ struct SFTPIntegrationTests {
 
     @Test
     func changeDirectory() async throws {
-        guard SFTPIntegrationTests.isDockerAvailable() else {
-            print("[SFTPTest] Docker not available, skipping test")
-            return
-        }
-
-        if !SFTPIntegrationTests.isServerRunning {
-            try SFTPIntegrationTests.startServer()
-        }
+        try skipUnlessCompose()
 
         let client = makeClient()
         try await connectClient(client)
@@ -859,20 +737,12 @@ struct SFTPIntegrationTests {
 
     @Test
     func downloadFileWithProgress() async throws {
-        guard SFTPIntegrationTests.isDockerAvailable() else {
-            print("[SFTPTest] Docker not available, skipping test")
-            return
-        }
+        try skipUnlessCompose()
 
-        if !SFTPIntegrationTests.isServerRunning {
-            try SFTPIntegrationTests.startServer()
-        }
-
-        // Create a test file with known content
         let containerFilePath = "/home/testuser/upload/progress_test.txt"
         let remoteFilePath = "/upload/progress_test.txt"
-        // Create a file large enough to produce at least one progress callback (>32KB)
-        SFTPIntegrationTests.dockerExec(["bash", "-c", "dd if=/dev/urandom of=\(containerFilePath) bs=1024 count=128 2>/dev/null"])
+        // Create a file large enough to produce at least one progress callback (>64KB)
+        SFTPIntegrationTests.composeExec(["bash", "-c", "dd if=/dev/urandom of=\(containerFilePath) bs=1024 count=128 2>/dev/null"])
 
         let tempDir = FileManager.default.temporaryDirectory
         let testFileName = "progress_download_\(UUID().uuidString.prefix(8)).bin"
@@ -913,14 +783,7 @@ struct SFTPIntegrationTests {
 
     @Test
     func downloadNonExistentFile() async throws {
-        guard SFTPIntegrationTests.isDockerAvailable() else {
-            print("[SFTPTest] Docker not available, skipping test")
-            return
-        }
-
-        if !SFTPIntegrationTests.isServerRunning {
-            try SFTPIntegrationTests.startServer()
-        }
+        try skipUnlessCompose()
 
         let tempDir = FileManager.default.temporaryDirectory
         let testFileName = "nonexistent_download_\(UUID().uuidString.prefix(8)).txt"
@@ -945,20 +808,13 @@ struct SFTPIntegrationTests {
 
     @Test
     func downloadDirectoryRecursively() async throws {
-        guard SFTPIntegrationTests.isDockerAvailable() else {
-            print("[SFTPTest] Docker not available, skipping test")
-            return
-        }
-
-        if !SFTPIntegrationTests.isServerRunning {
-            try SFTPIntegrationTests.startServer()
-        }
+        try skipUnlessCompose()
 
         // Create a nested directory structure inside the container
         let basePath = "/home/testuser/upload/nested_test"
-        SFTPIntegrationTests.dockerExec(["bash", "-c", "mkdir -p \(basePath)/subdir"])
-        SFTPIntegrationTests.dockerExec(["bash", "-c", "echo 'root file' > \(basePath)/root.txt"])
-        SFTPIntegrationTests.dockerExec(["bash", "-c", "echo 'sub file' > \(basePath)/subdir/child.txt"])
+        SFTPIntegrationTests.composeExec(["bash", "-c", "mkdir -p \(basePath)/subdir"])
+        SFTPIntegrationTests.composeExec(["bash", "-c", "echo 'root file' > \(basePath)/root.txt"])
+        SFTPIntegrationTests.composeExec(["bash", "-c", "echo 'sub file' > \(basePath)/subdir/child.txt"])
 
         let client = makeClient()
         try await connectClient(client)
@@ -1006,21 +862,13 @@ struct SFTPIntegrationTests {
 
     @Test
     func downloadThroughput() async throws {
-        guard SFTPIntegrationTests.isDockerAvailable() else {
-            print("[SFTPTest] Docker not available, skipping test")
-            return
-        }
+        try skipUnlessCompose()
 
-        if !SFTPIntegrationTests.isServerRunning {
-            try SFTPIntegrationTests.startServer()
-        }
-
-        // Create a 10MB file in the container — large enough to exercise the
-        // chunked read loop meaningfully, small enough to not slow down the suite.
+        // Create a 10MB file — large enough for meaningful measurement, small enough to not slow the suite.
         let sizeMB = 10
         let containerPath = "/home/testuser/upload/perf_test.bin"
         let remotePath = "/upload/perf_test.bin"
-        SFTPIntegrationTests.dockerExec([
+        SFTPIntegrationTests.composeExec([
             "bash", "-c",
             "dd if=/dev/urandom of=\(containerPath) bs=1048576 count=\(sizeMB) 2>/dev/null"
         ])
@@ -1067,14 +915,100 @@ struct SFTPIntegrationTests {
 
         // NOTE on memory regression testing:
         // To guard against someone accidentally buffering the entire file in RAM
-        // (instead of streaming 32KB chunks to disk), you could sample resident
+        // (instead of streaming 64KB chunks to disk), you could sample resident
         // memory via task_info(mach_task_self_, MACH_TASK_BASIC_INFO, ...) before
         // and after the download, then assert the delta stays under ~2x the chunk
-        // size (64KB). This catches the case where downloadToFile accumulates a
+        // size (128KB). This catches the case where downloadToFile accumulates a
         // Data buffer instead of writing through a FileHandle. Not implemented
         // here because it adds platform-specific mach API usage and the current
         // implementation clearly streams — but worth adding if the download path
         // is ever refactored.
+    }
+
+    /// Download over a link with simulated latency to verify that pipelined
+    /// reads keep throughput high despite round-trip delays.
+    ///
+    /// Uses toxiproxy (via the compose stack) to add 20ms of one-way latency
+    /// (40ms RTT) to the SFTP connection on port 2223. Without pipelining,
+    /// 64KB chunks at 40ms RTT would cap at ~1.6 MB/s. With 16 in-flight
+    /// reads the theoretical ceiling is ~25 MB/s, so we assert a 3 MB/s
+    /// floor as a conservative guard against regressions.
+    @Test
+    func downloadThroughputWithLatency() async throws {
+        try skipUnlessCompose()
+
+        // Add 20ms latency downstream (client ← server) via toxiproxy.
+        // Combined with ~20ms upstream this gives ~40ms RTT.
+        let toxicName = "latency_downstream"
+        try SFTPIntegrationTests.addToxic(
+            name: toxicName,
+            type: "latency",
+            attributes: ["latency": 20, "jitter": 5],
+            stream: "downstream"
+        )
+        let upstreamToxicName = "latency_upstream"
+        try SFTPIntegrationTests.addToxic(
+            name: upstreamToxicName,
+            type: "latency",
+            attributes: ["latency": 20, "jitter": 5],
+            stream: "upstream"
+        )
+
+        // Clean up toxics when done, no matter what
+        defer {
+            SFTPIntegrationTests.removeToxic(name: toxicName)
+            SFTPIntegrationTests.removeToxic(name: upstreamToxicName)
+        }
+
+        // Create a 10MB test file
+        let sizeMB = 10
+        let containerPath = "/home/testuser/upload/latency_test.bin"
+        let remotePath = "/upload/latency_test.bin"
+        SFTPIntegrationTests.composeExec([
+            "bash", "-c",
+            "dd if=/dev/urandom of=\(containerPath) bs=1048576 count=\(sizeMB) 2>/dev/null"
+        ])
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("latency_\(UUID().uuidString.prefix(8)).bin")
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        // Connect via the toxiproxy port (2223), not the direct port (2222)
+        let client = makeClient()
+        try await connectClient(client, port: SFTPIntegrationTests.proxyPort)
+
+        nonisolated(unsafe) var lastBytesRead: UInt64 = 0
+        let clock = ContinuousClock()
+
+        let elapsed = try await clock.measure {
+            try await client.downloadToFile(
+                remotePath: remotePath,
+                localURL: tempURL,
+                progress: { bytesRead, _ in lastBytesRead = bytesRead }
+            )
+        }
+
+        try await client.disconnect()
+
+        let attrs = try FileManager.default.attributesOfItem(atPath: tempURL.path)
+        let fileSize = attrs[.size] as? UInt64 ?? 0
+        let expectedSize = UInt64(sizeMB * 1048576)
+        #expect(fileSize == expectedSize)
+
+        let seconds = Double(elapsed.components.seconds)
+            + Double(elapsed.components.attoseconds) / 1e18
+        let mbPerSecond = Double(fileSize) / (1048576.0 * seconds)
+
+        print("[Perf/Latency] Downloaded \(sizeMB)MB in \(String(format: "%.2f", seconds))s")
+        print("[Perf/Latency] Throughput: \(String(format: "%.1f", mbPerSecond)) MB/s (with ~40ms RTT)")
+        print("[Perf/Latency] Last progress bytesRead: \(lastBytesRead)")
+
+        // Without pipelining at 40ms RTT and 64KB chunks: ~1.6 MB/s.
+        // With 16 in-flight reads: theoretical ~25 MB/s.
+        // We use a 3 MB/s floor — comfortably above the non-pipelined ceiling,
+        // but conservative enough for Docker overhead and toxiproxy jitter.
+        #expect(mbPerSecond > 3.0,
+            "Throughput \(String(format: "%.1f", mbPerSecond)) MB/s is too low with ~40ms RTT — pipelining may be broken")
     }
 }
 

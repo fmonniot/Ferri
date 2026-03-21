@@ -1,0 +1,8 @@
+[
+  {
+    "name": "sftp",
+    "listen": "0.0.0.0:2223",
+    "upstream": "sftp:22",
+    "enabled": true
+  }
+]

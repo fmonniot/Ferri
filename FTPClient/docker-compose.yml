@@ -1,0 +1,40 @@
+# Test infrastructure for FTPClient integration tests.
+#
+# Usage:
+#   docker compose up -d          # start all services
+#   swift test                    # run tests (they detect compose via fixed ports)
+#   docker compose down           # tear down
+#
+# Services:
+#   sftp        – SFTP server on localhost:2222 (direct, no latency)
+#   toxiproxy   – Proxy on localhost:2223 relaying to sftp:22, with REST API on :8474
+#                 Tests add latency dynamically via the API.
+
+services:
+  sftp:
+    image: atmoz/sftp:latest
+    platform: linux/amd64
+    ports:
+      - "2222:22"
+    command: "testuser:testpass123:::upload"
+    healthcheck:
+      # sshd is ready when it sends its version banner on port 22.
+      # The image has no nc, so use bash's /dev/tcp.
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/22' 2>/dev/null"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
+
+  toxiproxy:
+    image: shopify/toxiproxy:latest
+    platform: linux/amd64
+    ports:
+      - "8474:8474"   # REST API
+      - "2223:2223"   # SFTP proxy listen port
+    volumes:
+      - ./toxiproxy.json:/config/toxiproxy.json:ro
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    depends_on:
+      sftp:
+        condition: service_healthy
