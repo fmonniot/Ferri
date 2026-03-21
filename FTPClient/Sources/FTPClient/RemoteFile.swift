@@ -1,6 +1,6 @@
 import Foundation
 
-public struct RemoteFile: Identifiable, Hashable, Sendable {
+public struct RemoteFile: Identifiable, Hashable, Sendable, Codable {
     public let id: UUID
     public let name: String
     public let path: String

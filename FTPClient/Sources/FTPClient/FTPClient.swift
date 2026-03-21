@@ -8,7 +8,7 @@ public enum FTPClientError: Error {
 
 private let logger = Logger(label: "com.ftpclient.client")
 
-public final class FTPClient: @unchecked Sendable {
+public final class FTPClient: FTPClientProtocol, @unchecked Sendable {
     public static let shared = FTPClient()
 
     private var client: SFTPClient?
@@ -82,5 +82,28 @@ public final class FTPClient: @unchecked Sendable {
         guard let client = client else { throw FTPClientError.notConnected }
 
         try await client.downloadToFile(remotePath: fileName, localURL: localURL)
+    }
+
+    /// Recursively lists all files (not directories) under the given path.
+    /// Returns a flat array of `RemoteFile` with absolute paths.
+    public func listDirectoryRecursively(at path: String) async throws -> [RemoteFile] {
+        logger.debug("listDirectoryRecursively(at: \(path)) called")
+        guard isConnected, let client = client else {
+            throw FTPClientError.notConnected
+        }
+
+        var result: [RemoteFile] = []
+        let entries = try await client.listDirectory(path: path)
+
+        for entry in entries {
+            if entry.isDirectory {
+                let children = try await listDirectoryRecursively(at: entry.path)
+                result.append(contentsOf: children)
+            } else {
+                result.append(entry)
+            }
+        }
+
+        return result
     }
 }

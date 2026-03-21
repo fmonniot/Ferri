@@ -62,11 +62,9 @@ final class ConnectionListViewModel: ObservableObject {
     }
     
     private func clearAutoConnect(except serverID: UUID) {
-        var changed = false
         for i in connections.indices where connections[i].id != serverID && connections[i].autoConnect {
             connections[i].autoConnect = false
             storage.updateConnection(connections[i])
-            changed = true
         }
     }
 }

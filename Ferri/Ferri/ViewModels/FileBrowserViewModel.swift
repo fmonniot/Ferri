@@ -26,7 +26,7 @@ final class FileBrowserViewModel: ObservableObject {
     @Published var pathHistory: [String] = []
     @Published var historyIndex: Int = -1
     
-    private let ftpClient = FTPClient.shared
+    private let ftpClient: any FTPClientProtocol
     private weak var connectionViewModel: ConnectionListViewModel?
     
     var canGoBack: Bool {
@@ -41,7 +41,8 @@ final class FileBrowserViewModel: ObservableObject {
         currentPath != "/"
     }
     
-    init(connectionViewModel: ConnectionListViewModel? = nil) {
+    init(ftpClient: any FTPClientProtocol = FTPClient.shared, connectionViewModel: ConnectionListViewModel? = nil) {
+        self.ftpClient = ftpClient
         self.connectionViewModel = connectionViewModel
     }
     

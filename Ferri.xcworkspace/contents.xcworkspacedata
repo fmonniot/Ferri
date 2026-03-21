@@ -7,4 +7,13 @@
    <FileRef
       location = "group:FTPClient">
    </FileRef>
+   <FileRef
+      location = "group:README.md">
+   </FileRef>
+   <FileRef
+      location = "group:SPEC.md">
+   </FileRef>
+   <FileRef
+      location = "group:TODO.md">
+   </FileRef>
 </Workspace>
