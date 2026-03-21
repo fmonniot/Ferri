@@ -12,6 +12,9 @@ Known issue:
 - To test once the download speed has been improved: Finder completion status icon
 - Create tests for the Ferri app (trying to understand how to make that work with no access to docker CLI in tests [App Sandbox])
 - Use VSplitView instead of VStack for the transfer/file browser division
+- Clicking the refresh button move us back to the root folder
+- Double click on a folder doesn't open it
+- No "selection" of file (e.g. click on file doesn't change its background to blue/text to white)
 - Make sure we have a test for download integrity (e.g. file on server has same hash as file downloaded)
 
 - AGENTS.md file.
