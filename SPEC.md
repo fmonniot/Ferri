@@ -1,16 +1,16 @@
-# iFTP - macOS FTP Client Specification
+# Ferri - macOS FTP Client Specification
 
 ## 1. Project Overview
 
-- **Project Name**: iFTP
+- **Project Name**: Ferri
 - **Type**: macOS Native Application (Xcode)
-- **Purpose**: A lightweight FTP client for macOS allowing users to connect to FTP servers, browse remote files, and transfer files via drag & drop from Finder.
+- **Purpose**: A lightweight SFTP client for macOS allowing users to connect to SFTP servers, browse remote files, and transfer files via drag & drop from Finder.
 
 ## 2. UI/UX Specification
 
 ### 2.1 Window Structure
 
-- **Main Window**: Single window with `NSSplitView` layout
+- **Main Window**: Single window with slip view layout
   - Left: Sidebar (220pt min width) for connections
   - Center: Remote file browser (table view)
   - Bottom: Transfer queue panel (collapsible, 150pt default height)
@@ -46,7 +46,7 @@
 #### Remote File Browser
 - Table columns: Icon, Name, Size, Date Modified, Permissions
 - Sortable columns
-- Context menu: Download, Delete, Rename, New Folder
+- Context menu: Download
 
 #### Transfer Queue Panel
 - Collapsible (toggle button in divider)
@@ -79,11 +79,6 @@
    - Transfer queue with progress
    - Transfer history
 
-4. **File Operations** (Priority: Medium)
-   - Delete remote files/folders
-   - Rename remote files/folders
-   - Create new remote folder
-
 ### 3.2 User Flows
 
 1. **Quick Connect Flow**:
@@ -115,45 +110,59 @@
 
 ### 4.1 Dependencies
 
-- **BlueSocket** or similar: For low-level socket/FTP communication
-- Alternative: Use Foundation's `URLSession` with FTP (limited)
-- Consider: **CFNetwork** framework for FTP
+No third-party socket libraries. The SFTP protocol is implemented from scratch as a standalone Swift package (`FTPClient/`) on top of Apple's own networking/crypto stack:
+
+- **SwiftNIO** (`apple/swift-nio`): async networking / channel pipeline
+- **SwiftNIO SSH** (`apple/swift-nio-ssh`): SSH transport, key exchange, auth
+- **SwiftCrypto** (`apple/swift-crypto`): cryptographic primitives
+- **swift-log** (`apple/swift-log`): structured logging
+
+`Citadel` is explicitly excluded (see `FTPClient/REQUIREMENTS.md`) — do not add it as a dependency.
 
 ### 4.2 Storage
 
-- **Connections**: Property List file in Application Support directory
-- **Preferences**: UserDefaults
+- **Connections**: Property list file at `~/Library/Application Support/iFTP/connections.plist`, read/written by `ConnectionStorage` (`Ferri/Ferri/Services/ConnectionStorage.swift`) via `PropertyListEncoder`/`Decoder`.
+- **Preferences**: none currently persisted (no `UserDefaults` usage in the app).
 
 ### 4.3 File Structure
 
+Two-module workspace (`Ferri.xcworkspace`): the SwiftUI app and the SFTP package are separate build products joined by a local Swift package dependency.
+
 ```
-iFTP/
-├── App/
-│   └── iFTPApp.swift
-├── Models/
-│   ├── FTPServer.swift
-│   ├── RemoteFile.swift
-│   └── TransferItem.swift
-├── ViewModels/
-│   ├── ConnectionListViewModel.swift
-│   ├── FileBrowserViewModel.swift
-│   └── TransferQueueViewModel
-├── Views/
-│   ├── MainView.swift
-│   ├── SidebarView.swift
-│   ├── FileBrowserView.swift
-│   ├── TransferQueueView.swift
-│   └── ConnectionSheet.swift
-├── Services/
-│   ├── FTPClient.swift
-│   └── ConnectionStorage.swift
-└── Resources/
-    └── Assets.xcassets
+Ferri.xcworkspace
+├── Ferri/                          # Xcode app project
+│   └── Ferri/
+│       ├── FerriApp.swift
+│       ├── ContentView.swift
+│       ├── Models/
+│       │   └── TransferItem.swift  # RemoteFile/FTPServer live in FTPClient
+│       ├── ViewModels/
+│       │   ├── ConnectionListViewModel.swift
+│       │   ├── FileBrowserViewModel.swift
+│       │   └── TransferQueueViewModel.swift
+│       ├── Views/
+│       │   ├── MainView.swift
+│       │   ├── SidebarView.swift
+│       │   ├── FileBrowserView.swift
+│       │   ├── TransferQueueView.swift
+│       │   ├── ConnectionSheet.swift
+│       │   └── FilePromiseDragSource.swift   # NSFilePromiseProvider drag-to-Finder bridge
+│       ├── Services/
+│       │   └── ConnectionStorage.swift
+│       └── Assets.xcassets
+└── FTPClient/                      # Swift package, the SFTP client library
+    └── Sources/FTPClient/
+        ├── FTPClient.swift         # public facade (FTPClient.shared)
+        ├── FTPClientProtocol.swift # protocol the app codes against (enables mocking)
+        ├── SFTPClient.swift        # actor: connection/auth/transfer logic (NIOSSH)
+        ├── SFTPProtocol.swift      # SFTP wire-format encode/decode
+        ├── RemoteFile.swift
+        └── FTPServer.swift
 ```
 
 ### 4.4 Supported Protocols
 
-SFTP only
+SFTP only. Read/browse/download operations only — no remote mutation (delete/rename/create-folder are intentionally unimplemented in `FileBrowserViewModel`, whose corresponding methods throw "not supported").
 
 ## 5. System Integration
 
