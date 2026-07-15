@@ -16,4 +16,7 @@
    <FileRef
       location = "group:TODO.md">
    </FileRef>
+   <FileRef
+      location = "group:CLAUDE.md">
+   </FileRef>
 </Workspace>
