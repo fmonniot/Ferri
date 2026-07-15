@@ -1,12 +1,7 @@
 Known issue:
 
-- ~Modifying an existing connection doesn't really work. Existing value aren't show, and so it gives the impression to start from scratch again.~
-    Fixed by pickle when adding new insecure toggle
-- Fix all the issues reported by xcode
-- There are some thread issue with the network code, need to fix that (especially given it's the main reason I'm leaving cyberduck for)
 - Understand naming convention about actor usage (e.g. Merge FTPClient with FtpClientActor, remove the suffix, etc…
 - Have a timeout when receiving data on data channels
-- Downloading files is slow: 1.5MB/s instead of cyberduck 6.5MB/s
 - Still doesn't really work with folders, can wait.
 - No transfer entry in the transfer pane
 - To test once the download speed has been improved: Finder completion status icon
