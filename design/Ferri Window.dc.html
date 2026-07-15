@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+@keyframes ferri-spin { to { transform: rotate(360deg); } }
+@keyframes ferri-stripe { from { background-position: 0 0; } to { background-position: 28px 0; } }
+</style>
+</helmet>
+<div ref="{{ setRoot }}" style="--bg:{{ v.bg }};--sidebar:{{ v.sidebar }};--toolbar:{{ v.toolbar }};--text:{{ v.text }};--text2:{{ v.text2 }};--sep:{{ v.sep }};--accent:{{ v.accent }};--sel:{{ v.sel }};--selText:{{ v.selText }};--field:{{ v.field }};--fieldBorder:{{ v.fieldBorder }};--header:{{ v.header }};--btn:{{ v.btn }};--winBorder:{{ v.winBorder }};--menuBg:{{ v.menuBg }};position:relative;width:900px;height:600px;flex:none;display:flex;flex-direction:column;border-radius:11px;overflow:hidden;background:var(--bg);border:0.5px solid var(--winBorder);box-shadow:0 22px 70px rgba(0,0,0,0.34),0 0 0 0.5px rgba(0,0,0,0.1);font-family:-apple-system,'SF Pro Text',system-ui,'Helvetica Neue',Helvetica,Arial,sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;user-select:none">
+
+  <!-- ===== Unified titlebar + toolbar ===== -->
+  <div style="display:flex;height:52px;flex:none;border-bottom:0.5px solid var(--sep)">
+    <div style="width:220px;flex:none;display:flex;align-items:center;gap:8px;padding:0 20px;background:var(--sidebar)">
+      <div style="width:12px;height:12px;border-radius:50%;background:#ff5f57;box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.12)"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#febc2e;box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.12)"></div>
+      <div style="width:12px;height:12px;border-radius:50%;background:#28c840;box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.12)"></div>
+    </div>
+    <div style="flex:1;display:flex;align-items:center;gap:14px;padding:0 14px;background:var(--toolbar)">
+      <div onClick="{{ onToggleSidebar }}" title="Toggle Sidebar" style="width:28px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;color:var(--text)" style-hover="background:rgba(128,128,128,0.16)">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.6" stroke="currentColor" stroke-width="1.3"/><path d="M6.3 3v10" stroke="currentColor" stroke-width="1.3"/></svg>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:2px">
+        <div onClick="{{ onBack }}" title="Back" style="width:28px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;color:var(--text)" style-hover="background:rgba(128,128,128,0.16)">
+          <svg width="9" height="14" viewBox="0 0 9 14" fill="none"><path d="M7.5 1L1.5 7l6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div onClick="{{ onForward }}" title="Forward" style="width:28px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;color:var(--text2)" style-hover="background:rgba(128,128,128,0.16)">
+          <svg width="9" height="14" viewBox="0 0 9 14" fill="none"><path d="M1.5 1l6 6-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div onClick="{{ onUp }}" title="Enclosing folder" style="width:28px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;margin-left:2px;color:var(--text)" style-hover="background:rgba(128,128,128,0.16)">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 12.5V2M7 2L2.5 6.5M7 2l4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+
+      <div style="flex:1"></div>
+
+      <div onClick="{{ onRefresh }}" title="Refresh" style="width:28px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;color:var(--text)" style-hover="background:rgba(128,128,128,0.16)">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="{{ refreshSpin }}"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13.7 2.2v3.1h-3.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div onClick="{{ onToggleQueue }}" title="Transfers" style="height:24px;display:flex;align-items:center;gap:5px;padding:0 9px;border-radius:6px;cursor:pointer;color:var(--text)" style-hover="background:rgba(128,128,128,0.16)">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0L4.5 6.5M8 10l3.5-3.5M2.5 13h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <sc-if value="{{ transferBadge }}" hint-placeholder-val="{{ true }}">
+          <span style="min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:var(--accent);color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ transferBadge }}</span>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Body ===== -->
+  <div style="flex:1;display:flex;min-height:0">
+    <!-- Sidebar -->
+    <div style="{{ sidebarStyle }}">
+      <div style="flex:1;overflow:auto;padding:8px 10px;width:220px">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);padding:4px 8px 6px;letter-spacing:0.02em">Servers</div>
+        <sc-for list="{{ connections }}" as="c" hint-placeholder-count="4">
+          <div onClick="{{ c.onClick }}" onDoubleClick="{{ c.onOpen }}" onContextMenu="{{ c.onMenu }}" style="{{ c.rowStyle }}">
+            <div style="{{ c.dotStyle }}"></div>
+            <div style="min-width:0;flex:1">
+              <div style="font-size:12.5px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.name }}</div>
+              <div style="{{ c.hostStyle }}">{{ c.host }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:none;border-top:0.5px solid var(--sep);padding:6px 10px;display:flex;align-items:center;gap:6px;width:220px">
+        <div onClick="{{ onOpenSheet }}" title="Add server" style="width:24px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;color:var(--text)" style-hover="background:rgba(128,128,128,0.16)">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2.5v9M2.5 7h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)">
+      <!-- Path bar -->
+      <div style="flex:none;height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:0.5px solid var(--sep)">
+        <sc-if value="{{ connected }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);min-width:0;overflow:hidden">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="flex:none"><rect x="2.5" y="2.5" width="11" height="4" rx="1.2" stroke="currentColor" stroke-width="1.1"/><rect x="2.5" y="9.5" width="11" height="4" rx="1.2" stroke="currentColor" stroke-width="1.1"/><circle cx="5" cy="4.5" r="0.7" fill="currentColor"/><circle cx="5" cy="11.5" r="0.7" fill="currentColor"/></svg>
+            <sc-for list="{{ crumbs }}" as="cr" hint-placeholder-count="2">
+              <span onClick="{{ cr.onClick }}" style="{{ cr.style }}">{{ cr.label }}</span>
+              <sc-if value="{{ cr.sep }}" hint-placeholder-val="{{ true }}"><span style="opacity:0.4">›</span></sc-if>
+            </sc-for>
+          </div>
+          <div style="flex:1"></div>
+          <div style="font-size:11.5px;color:var(--text2)">{{ itemCount }}</div>
+        </sc-if>
+      </div>
+
+      <!-- File list header -->
+      <sc-if value="{{ showList }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:none;display:flex;height:26px;align-items:center;background:var(--header);border-bottom:0.5px solid var(--sep);font-size:11.5px;color:var(--text2);font-weight:500">
+          <div onClick="{{ onSortName }}" style="flex:1;min-width:0;padding-left:14px;cursor:pointer;display:flex;align-items:center;gap:3px">Name<span style="color:var(--accent);font-size:8px">{{ nameArrow }}</span></div>
+          <div onClick="{{ onSortSize }}" style="width:92px;flex:none;cursor:pointer;display:flex;align-items:center;gap:3px">Size<span style="color:var(--accent);font-size:8px">{{ sizeArrow }}</span></div>
+          <div onClick="{{ onSortDate }}" style="width:150px;flex:none;cursor:pointer;display:flex;align-items:center;gap:3px">Date Modified<span style="color:var(--accent);font-size:8px">{{ dateArrow }}</span></div>
+          <div onClick="{{ onSortPerm }}" style="width:120px;flex:none;padding-right:14px;cursor:pointer;display:flex;align-items:center;gap:3px">Permissions<span style="color:var(--accent);font-size:8px">{{ permArrow }}</span></div>
+        </div>
+        <div style="flex:1;overflow:auto;min-height:0">
+          <sc-for list="{{ files }}" as="f" hint-placeholder-count="7">
+            <div onClick="{{ f.onClick }}" onDoubleClick="{{ f.onOpen }}" onContextMenu="{{ f.onMenu }}" style="{{ f.rowStyle }}">
+              <div style="flex:1;min-width:0;padding-left:14px;display:flex;align-items:center;gap:9px">
+                <sc-if value="{{ f.isDir }}" hint-placeholder-val="{{ true }}">
+                  <svg width="18" height="18" viewBox="0 0 28 24" style="flex:none"><path d="M2 6c0-1.7 1.3-3 3-3h5.2c.5 0 1 .2 1.4.6L14 5.5h9c1.7 0 3 1.3 3 3v9.5c0 1.7-1.3 3-3 3H5c-1.7 0-3-1.3-3-3V6z" fill="#4fa4ff"/><path d="M2 9.5h24v8c0 1.7-1.3 3-3 3H5c-1.7 0-3-1.3-3-3v-8z" fill="#6db6ff"/></svg>
+                </sc-if>
+                <sc-if value="{{ f.isFile }}" hint-placeholder-val="{{ true }}">
+                  <div style="width:15px;height:18px;position:relative;flex:none">
+                    <div style="position:absolute;inset:0;background:#fdfdfd;border:0.6px solid #cfcfd6;border-radius:2px"></div>
+                    <div style="position:absolute;left:0;bottom:0;width:100%;height:8px;border-radius:0 0 2px 2px;display:flex;align-items:center;justify-content:center;font-size:5px;font-weight:800;color:#fff;letter-spacing:0.2px;background:{{ f.extColor }}">{{ f.extLabel }}</div>
+                  </div>
+                </sc-if>
+                <span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.name }}</span>
+              </div>
+              <div style="width:92px;flex:none;font-size:12px;color:{{ f.metaColor }};font-variant-numeric:tabular-nums">{{ f.size }}</div>
+              <div style="width:150px;flex:none;font-size:12px;color:{{ f.metaColor }}">{{ f.date }}</div>
+              <div style="width:120px;flex:none;padding-right:14px;font-size:11.5px;color:{{ f.metaColor }};font-family:ui-monospace,'SF Mono',Menlo,monospace">{{ f.perm }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- Empty / not-connected / permission states -->
+      <sc-if value="{{ showEmpty }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px;text-align:center">
+          <div style="{{ emptyIconStyle }}">{{ emptyGlyph }}</div>
+          <div>
+            <div style="font-size:15px;font-weight:600;margin-bottom:4px">{{ emptyTitle }}</div>
+            <div style="font-size:12.5px;color:var(--text2);max-width:260px;line-height:1.4">{{ emptyBody }}</div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <!-- ===== Transfer queue ===== -->
+  <sc-if value="{{ queueOpen }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:none;height:158px;border-top:0.5px solid var(--sep);background:var(--sidebar);display:flex;flex-direction:column">
+      <div style="flex:none;height:30px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:0.5px solid var(--sep)">
+        <span style="font-size:12px;font-weight:600">Transfers</span>
+        <span style="font-size:11px;color:var(--text2)">{{ queueSummary }}</span>
+        <div style="flex:1"></div>
+        <button onClick="{{ onClearCompleted }}" style="border:0;background:transparent;font-family:inherit;font-size:11.5px;color:var(--accent);cursor:pointer;font-weight:500">Clear completed</button>
+        <div onClick="{{ onToggleQueue }}" style="width:22px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:pointer;color:var(--text2)" style-hover="background:rgba(128,128,128,0.16)">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2.5 4l3.5 3.5L9.5 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+      <div style="flex:1;overflow:auto">
+        <sc-for list="{{ transfers }}" as="t" hint-placeholder-count="2">
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:0.5px solid var(--sep)">
+            <div style="{{ t.dirStyle }}">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M6 2v8m0 0L2.5 6.5M6 10l3.5-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+                <span style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.name }}</span>
+                <div style="flex:1"></div>
+                <span style="font-size:11px;color:{{ t.statusColor }};font-weight:500">{{ t.status }}</span>
+                <span style="font-size:11px;color:var(--text2);font-variant-numeric:tabular-nums;min-width:54px;text-align:right">{{ t.speed }}</span>
+              </div>
+              <div style="height:5px;border-radius:3px;background:rgba(128,128,128,0.2);overflow:hidden">
+                <div style="height:100%;border-radius:3px;background:{{ t.barColor }};width:{{ t.pct }}"></div>
+              </div>
+            </div>
+            <sc-if value="{{ t.canPause }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ t.onTogglePause }}" title="{{ t.pauseTitle }}" style="width:24px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;color:var(--text2)" style-hover="background:rgba(128,128,128,0.16)">
+                <sc-if value="{{ t.paused }}" hint-placeholder-val="{{ false }}">
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M3 2l6.5 4L3 10V2z" fill="currentColor"/></svg>
+                </sc-if>
+                <sc-if value="{{ t.playing }}" hint-placeholder-val="{{ true }}">
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="3" y="2.5" width="2.2" height="7" rx="0.6" fill="currentColor"/><rect x="6.8" y="2.5" width="2.2" height="7" rx="0.6" fill="currentColor"/></svg>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Context menu ===== -->
+  <sc-if value="{{ menu.show }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ onCloseMenu }}" style="position:absolute;inset:0;z-index:30"></div>
+    <div style="position:absolute;z-index:31;top:{{ menu.y }};left:{{ menu.x }};min-width:172px;background:var(--menuBg);border:0.5px solid var(--winBorder);border-radius:8px;box-shadow:0 12px 34px rgba(0,0,0,0.3);padding:5px;backdrop-filter:blur(30px)">
+      <div onClick="{{ onDownload }}" style="display:flex;align-items:center;gap:8px;padding:5px 9px;border-radius:5px;font-size:12.5px;cursor:pointer;color:var(--text)" style-hover="background:var(--accent);color:#fff">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1.5v8m0 0L3.5 6M7 9.5L10.5 6M2 12h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Download
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 9px;border-radius:5px;font-size:12.5px;color:var(--text2)">Get Info</div>
+      <div style="height:0.5px;background:var(--sep);margin:4px 6px"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 9px;border-radius:5px;font-size:12.5px;color:var(--text2)">Copy Path</div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Connection context menu ===== -->
+  <sc-if value="{{ connMenu.show }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ onCloseConnMenu }}" style="position:absolute;inset:0;z-index:30"></div>
+    <div style="position:absolute;z-index:31;top:{{ connMenu.y }};left:{{ connMenu.x }};min-width:150px;background:var(--menuBg);border:0.5px solid var(--winBorder);border-radius:8px;box-shadow:0 12px 34px rgba(0,0,0,0.3);padding:5px;backdrop-filter:blur(30px)">
+      <div onClick="{{ onConnMenuConnect }}" style="display:flex;align-items:center;gap:8px;padding:5px 9px;border-radius:5px;font-size:12.5px;cursor:pointer;color:var(--text)" style-hover="background:var(--accent);color:#fff">Connect</div>
+      <div onClick="{{ onConnMenuDisconnect }}" style="display:flex;align-items:center;gap:8px;padding:5px 9px;border-radius:5px;font-size:12.5px;cursor:pointer;color:var(--text)" style-hover="background:var(--accent);color:#fff">Disconnect</div>
+      <div onClick="{{ onConnMenuEdit }}" style="display:flex;align-items:center;gap:8px;padding:5px 9px;border-radius:5px;font-size:12.5px;cursor:pointer;color:var(--text)" style-hover="background:var(--accent);color:#fff">Edit…</div>
+      <div style="height:0.5px;background:var(--sep);margin:4px 6px"></div>
+      <div onClick="{{ onConnMenuDelete }}" style="display:flex;align-items:center;gap:8px;padding:5px 9px;border-radius:5px;font-size:12.5px;cursor:pointer;color:#ff453a" style-hover="background:#ff453a;color:#fff">Delete</div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Connecting overlay ===== -->
+  <sc-if value="{{ connecting }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:52px 0 0 220px;z-index:20;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+      <svg width="30" height="30" viewBox="0 0 30 30" fill="none" style="animation:ferri-spin 0.9s linear infinite"><circle cx="15" cy="15" r="12" stroke="var(--sep)" stroke-width="3"/><path d="M15 3a12 12 0 0 1 12 12" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/></svg>
+      <div style="font-size:13px;color:var(--text2)">Connecting to <span style="color:var(--text);font-weight:600">{{ connecting }}</span>…</div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Connection sheet ===== -->
+  <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:40;background:rgba(0,0,0,0.28);display:flex;justify-content:center;align-items:flex-start">
+      <div style="margin-top:0;width:430px;background:var(--menuBg);border-radius:0 0 12px 12px;box-shadow:0 24px 60px rgba(0,0,0,0.4);padding:24px 26px 20px;color:var(--text)">
+        <div style="display:flex;align-items:center;gap:13px;margin-bottom:20px">
+          <div style="width:44px;height:44px;border-radius:10px;background:linear-gradient(160deg,#5aa9ff,#2f7ff0);display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 3px 8px rgba(47,127,240,0.4)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="6" rx="1.6" stroke="#fff" stroke-width="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.6" stroke="#fff" stroke-width="1.5"/><circle cx="7.5" cy="7" r="1" fill="#fff"/><circle cx="7.5" cy="17" r="1" fill="#fff"/></svg>
+          </div>
+          <div>
+            <div style="font-size:15px;font-weight:600">{{ sheetTitle }}</div>
+            <div style="font-size:12px;color:var(--text2)">Enter the SFTP server details.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:11px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="width:92px;text-align:right;font-size:12.5px;color:var(--text2)">Name</label>
+            <input value="{{ sheet.name }}" onChange="{{ onSheetName }}" placeholder="My Server" spellcheck="false" style="flex:1;height:26px;border:0.5px solid var(--fieldBorder);border-radius:6px;background:var(--field);padding:0 9px;font-family:inherit;font-size:12.5px;color:var(--text);outline:none" />
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="width:92px;text-align:right;font-size:12.5px;color:var(--text2)">Host</label>
+            <input value="{{ sheet.host }}" onChange="{{ onSheetHost }}" placeholder="example.com" spellcheck="false" style="flex:1;height:26px;border:0.5px solid var(--fieldBorder);border-radius:6px;background:var(--field);padding:0 9px;font-family:inherit;font-size:12.5px;color:var(--text);outline:none" />
+            <label style="font-size:12.5px;color:var(--text2)">Port</label>
+            <input value="{{ sheet.port }}" onChange="{{ onSheetPort }}" style="width:52px;height:26px;border:0.5px solid var(--fieldBorder);border-radius:6px;background:var(--field);padding:0 9px;font-family:inherit;font-size:12.5px;color:var(--text);outline:none;text-align:center" />
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="width:92px;text-align:right;font-size:12.5px;color:var(--text2)">Username</label>
+            <input value="{{ sheet.user }}" onChange="{{ onSheetUser }}" placeholder="user" spellcheck="false" style="flex:1;height:26px;border:0.5px solid var(--fieldBorder);border-radius:6px;background:var(--field);padding:0 9px;font-family:inherit;font-size:12.5px;color:var(--text);outline:none" />
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="width:92px;text-align:right;font-size:12.5px;color:var(--text2)">Password</label>
+            <input type="password" value="{{ sheet.pass }}" onChange="{{ onSheetPass }}" placeholder="••••••••" style="flex:1;height:26px;border:0.5px solid var(--fieldBorder);border-radius:6px;background:var(--field);padding:0 9px;font-family:inherit;font-size:12.5px;color:var(--text);outline:none" />
+          </div>
+          <div style="height:0.5px;background:var(--sep);margin:3px 0"></div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="width:92px;text-align:right;font-size:12.5px;color:var(--text2)">Private Key</label>
+            <div style="flex:1;height:26px;border:0.5px solid var(--fieldBorder);border-radius:6px;background:var(--field);padding:0 4px 0 9px;display:flex;align-items:center;gap:8px">
+              <span style="flex:1;font-size:12px;color:var(--text2)">Optional</span>
+              <button style="border:0;height:20px;padding:0 9px;border-radius:5px;background:var(--btn);color:var(--text);font-family:inherit;font-size:11px;cursor:pointer;box-shadow:0 0.5px 1px rgba(0,0,0,0.15)">Choose…</button>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <label style="width:92px;text-align:right;font-size:12.5px;color:var(--text2)">Passphrase</label>
+            <input type="password" placeholder="Optional" style="flex:1;height:26px;border:0.5px solid var(--fieldBorder);border-radius:6px;background:var(--field);padding:0 9px;font-family:inherit;font-size:12.5px;color:var(--text);outline:none" />
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:22px">
+          <button onClick="{{ onCloseSheet }}" style="height:28px;padding:0 16px;border-radius:7px;border:0.5px solid var(--fieldBorder);background:var(--btn);color:var(--text);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer;box-shadow:0 0.5px 1px rgba(0,0,0,0.1)">Cancel</button>
+          <button onClick="{{ onSaveSheet }}" style="height:28px;padding:0 18px;border-radius:7px;border:0;background:var(--accent);color:#fff;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">Connect</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Error alert ===== -->
+  <sc-if value="{{ error.show }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:50;background:rgba(0,0,0,0.22);display:flex;align-items:center;justify-content:center">
+      <div style="width:270px;background:var(--menuBg);border-radius:13px;box-shadow:0 26px 70px rgba(0,0,0,0.45);padding:20px 20px 16px;text-align:center;color:var(--text)">
+        <div style="width:52px;height:52px;margin:0 auto 12px;border-radius:12px;background:linear-gradient(160deg,#ff8a8a,#e5484d);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(229,72,77,0.4)">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M14 7v9" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><circle cx="14" cy="20.5" r="1.5" fill="#fff"/></svg>
+        </div>
+        <div style="font-size:13.5px;font-weight:600;margin-bottom:5px;line-height:1.3">{{ error.title }}</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.4;margin-bottom:16px">{{ error.body }}</div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <button onClick="{{ onRetry }}" style="height:28px;border-radius:7px;border:0;background:var(--accent);color:#fff;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">Retry</button>
+          <button onClick="{{ onDismissError }}" style="height:28px;border-radius:7px;border:0.5px solid var(--fieldBorder);background:var(--btn);color:var(--text);font-family:inherit;font-size:12.5px;font-weight:500;cursor:pointer">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Storyboard callout pins ===== -->
+  <sc-for list="{{ pins }}" as="p" hint-placeholder-count="0">
+    <div style="{{ p.style }}">{{ p.n }}</div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:900,&quot;height&quot;:600},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;},&quot;interactive&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;scene&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;object&quot;},&quot;callouts&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;{n:number,top:number,left:number}[]&quot;}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const sc = props.scene || {};
+    this._ivs = [];
+    this._tid = 0;
+    this.state = {
+      connected: sc.connected || false,
+      activeConn: sc.activeConn || (sc.connected ? 'ashelia' : null),
+      path: sc.path || '/home/heythere',
+      history: [],
+      future: [],
+      selection: sc.selection || [],
+      sortKey: sc.sortKey || 'name',
+      sortDir: sc.sortDir || 'asc',
+      connecting: sc.connecting || null,
+      error: sc.error || null,
+      browseError: sc.browseError || null,
+      queueOpen: sc.queueOpen || false,
+      transfers: sc.transfers || [],
+      sheetOpen: sc.sheetOpen || false,
+      sheet: sc.sheet || { name: '', host: '', port: '22', user: '', pass: '' },
+      sheetEditId: null,
+      menu: sc.menu || null,
+      connMenu: sc.connMenu || null,
+      connOverrides: {},
+      deletedConns: [],
+      addedConns: [],
+      sidebarCollapsed: sc.sidebarCollapsed || false,
+      refreshing: false,
+    };
+  }
+
+  componentWillUnmount() { this._ivs.forEach(clearInterval); }
+  live() { return this.props.interactive; }
+
+  // ---------- data ----------
+  get CONNS() {
+    const st = this.state;
+    const base = [
+      { id: 'ashelia', name: 'ashelia', host: 'server.ashelia.xyz', user: 'heythere', status: 'ok' },
+      { id: 'staging', name: 'staging', host: 'staging.ashelia.xyz', user: 'deploy', status: 'off' },
+      { id: 'backup-nas', name: 'backup-nas', host: '10.0.0.5', user: 'admin', status: 'off', fail: 'auth' },
+      { id: 'prod-db', name: 'prod-db', host: 'db.ashelia.xyz', user: 'postgres', status: 'off', fail: 'timeout' },
+      ...(this.props.scene && this.props.scene.extraConns ? this.props.scene.extraConns : []),
+    ];
+    return base.concat(st.addedConns || [])
+      .filter(c => !(st.deletedConns || []).includes(c.id))
+      .map(c => (st.connOverrides && st.connOverrides[c.id]) ? { ...c, ...st.connOverrides[c.id] } : c);
+  }
+
+  get FS() {
+    const d = (name, date, perm) => ({ name, type: 'dir', size: '--', sizeB: -1, date, dateS: this._ds(date), perm: perm || 'drwxr-xr-x' });
+    const f = (name, size, sizeB, date, perm) => ({ name, type: 'file', size, sizeB, date, dateS: this._ds(date), perm: perm || '-rw-r--r--' });
+    return {
+      '/': [ d('home', 'Feb 2, 2026'), d('var', 'Jan 18, 2026'), d('srv', 'Mar 4, 2026'), d('etc', 'Jan 6, 2026'), d('tmp', 'Jul 15, 2026') ],
+      '/home': [ d('heythere', 'Jul 14, 2026', 'drwxr-x---') ],
+      '/home/heythere': [
+        d('projects', 'Jul 12, 2026'), d('public_html', 'Jun 30, 2026'), d('backups', 'Jul 15, 2026'), d('logs', 'Jul 15, 2026'),
+        f('.bashrc', '3.2 KB', 3200, 'May 9, 2026'),
+        f('deploy.sh', '1.8 KB', 1800, 'Jul 10, 2026', '-rwxr-xr-x'),
+        f('notes.md', '6.4 KB', 6400, 'Jul 13, 2026'),
+        f('server-diagram.png', '412 KB', 412000, 'Jun 21, 2026'),
+        f('db-dump-2026-07.sql', '58.1 MB', 58100000, 'Jul 15, 2026'),
+      ],
+      '/home/heythere/projects': [ d('ashelia-web', 'Jul 12, 2026'), d('api-server', 'Jul 9, 2026'), d('scripts', 'Jun 2, 2026'), f('README.md', '2.1 KB', 2100, 'May 30, 2026'), f('TODO.txt', '840 B', 840, 'Jul 8, 2026') ],
+      '/home/heythere/public_html': [ d('assets', 'Jun 28, 2026'), f('index.html', '9.7 KB', 9700, 'Jun 30, 2026'), f('style.css', '14.2 KB', 14200, 'Jun 30, 2026'), f('app.js', '31.6 KB', 31600, 'Jun 29, 2026'), f('.htaccess', '512 B', 512, 'Apr 2, 2026') ],
+      '/home/heythere/backups': [ f('site-2026-07-14.tar.gz', '128 MB', 128000000, 'Jul 14, 2026'), f('site-2026-07-07.tar.gz', '126 MB', 126000000, 'Jul 7, 2026'), f('db-2026-07-15.sql.gz', '11.3 MB', 11300000, 'Jul 15, 2026') ],
+      '/home/heythere/logs': [ f('access.log', '2.4 MB', 2400000, 'Jul 15, 2026'), f('error.log', '184 KB', 184000, 'Jul 15, 2026'), f('deploy.log', '22 KB', 22000, 'Jul 10, 2026') ],
+      '/home/heythere/projects/ashelia-web': [ d('src', 'Jul 12, 2026'), d('dist', 'Jul 12, 2026'), f('package.json', '1.4 KB', 1400, 'Jul 1, 2026'), f('vite.config.js', '680 B', 680, 'Jun 15, 2026') ],
+      '/var': [ d('www', 'Jun 30, 2026'), d('log', 'Jul 15, 2026'), d('lib', 'Jan 2, 2026') ],
+      '/srv': [ d('data', 'Mar 4, 2026') ],
+      '/tmp': [ f('session_a1b2c3.tmp', '18 KB', 18000, 'Jul 15, 2026') ],
+    };
+  }
+  _ds(date) { return Date.parse(date) || 0; }
+  get RESTRICTED() { return ['etc', 'root', 'var/lib']; }
+
+  // ---------- palette ----------
+  get palette() {
+    const light = { bg: '#ffffff', sidebar: '#ececee', toolbar: '#f3f2f4', text: '#1d1d1f', text2: 'rgba(60,60,67,0.55)', sep: 'rgba(0,0,0,0.09)', accent: '#0a6cff', sel: '#0a6cff', selText: '#ffffff', field: '#ffffff', fieldBorder: 'rgba(0,0,0,0.14)', header: '#f6f6f8', btn: '#ffffff', winBorder: 'rgba(0,0,0,0.16)', menuBg: 'rgba(246,246,248,0.94)' };
+    const dark = { bg: '#1e1e1f', sidebar: '#2a2a2c', toolbar: '#323234', text: '#f2f2f4', text2: 'rgba(235,235,245,0.5)', sep: 'rgba(255,255,255,0.09)', accent: '#0a84ff', sel: '#0a84ff', selText: '#ffffff', field: '#1c1c1e', fieldBorder: 'rgba(255,255,255,0.14)', header: '#2c2c2e', btn: '#3a3a3c', winBorder: 'rgba(0,0,0,0.6)', menuBg: 'rgba(44,44,46,0.94)' };
+    return (this.props.theme === 'dark') ? dark : light;
+  }
+
+  // ---------- helpers ----------
+  entries(path) { return this.FS[path] || []; }
+  activeConnObj() { return this.CONNS.find(c => c.id === this.state.activeConn) || this.CONNS[0]; }
+
+  // ---------- nav ----------
+  navTo(path, pushHistory = true) {
+    this.setState(s => ({
+      path,
+      history: pushHistory ? [...s.history, s.path] : s.history,
+      future: pushHistory ? [] : s.future,
+      selection: [],
+      browseError: null,
+    }));
+  }
+  onBack = () => { if (!this.live()) return; this.setState(s => { if (!s.history.length) return {}; const prev = s.history[s.history.length - 1]; return { path: prev, history: s.history.slice(0, -1), future: [s.path, ...s.future], selection: [], browseError: null }; }); };
+  onForward = () => { if (!this.live()) return; this.setState(s => { if (!s.future.length) return {}; const nxt = s.future[0]; return { path: nxt, history: [...s.history, s.path], future: s.future.slice(1), selection: [], browseError: null }; }); };
+  onUp = () => { if (!this.live()) return; const p = this.state.path; if (p === '/') return; const parent = p.split('/').slice(0, -1).join('/') || '/'; this.navTo(parent); };
+  onRefresh = () => { if (!this.live()) return; this.setState({ refreshing: true }); setTimeout(() => this.setState({ refreshing: false }), 650); };
+
+  openEntry = (e) => {
+    if (!this.live()) return;
+    if (e.type === 'dir') {
+      const child = (this.state.path === '/' ? '' : this.state.path) + '/' + e.name;
+      if (this.RESTRICTED.includes(e.name)) { this.setState({ browseError: 'perm', path: child, history: [...this.state.history, this.state.path], future: [], selection: [] }); return; }
+      this.navTo(child);
+    }
+  };
+
+  // ---------- connect ----------
+  connect = (conn) => {
+    if (!this.live()) return;
+    this.setState({ connecting: conn.host, menu: null });
+    this._pending = conn;
+    clearTimeout(this._ct);
+    this._ct = setTimeout(() => {
+      if (conn.fail === 'timeout') this.setState({ connecting: null, error: { kind: 'timeout', host: conn.host } });
+      else if (conn.fail === 'auth') this.setState({ connecting: null, error: { kind: 'auth', host: conn.host } });
+      else this.setState({ connecting: null, connected: true, activeConn: conn.id, path: '/home/' + conn.user, history: [], future: [], selection: [], browseError: null });
+    }, 1300);
+  };
+  onToggleSidebar = () => { if (!this.live()) return; this.setState(s => ({ sidebarCollapsed: !s.sidebarCollapsed })); };
+  selectConn = (conn) => { if (!this.live()) return; this.setState({ activeConn: conn.id }); };
+  connMenuOpen = (ev, conn) => {
+    if (!this.live()) { ev.preventDefault(); return; }
+    ev.preventDefault();
+    const r = this._root ? this._root.getBoundingClientRect() : { left: 0, top: 0 };
+    let x = ev.clientX - r.left, y = ev.clientY - r.top;
+    x = Math.min(x, 900 - 160); y = Math.min(y, 600 - 110);
+    this.setState({ connMenu: { connId: conn.id, x, y } });
+  };
+  onCloseConnMenu = () => this.setState({ connMenu: null });
+  onConnMenuConnect = () => {
+    const cm = this.state.connMenu; this.setState({ connMenu: null });
+    if (cm) { const c = this.CONNS.find(x => x.id === cm.connId); if (c) this.connect(c); }
+  };
+  onConnMenuDisconnect = () => {
+    const cm = this.state.connMenu; this.setState({ connMenu: null });
+    if (cm && this.state.activeConn === cm.connId) this.setState({ connected: false, connecting: null });
+  };
+  onConnMenuEdit = () => {
+    const cm = this.state.connMenu; this.setState({ connMenu: null });
+    if (!cm) return;
+    const c = this.CONNS.find(x => x.id === cm.connId);
+    if (c) this.setState({ sheetOpen: true, sheetEditId: c.id, sheet: { name: c.name, host: c.host, port: '22', user: c.user || '', pass: '' } });
+  };
+  onConnMenuDelete = () => {
+    const cm = this.state.connMenu; this.setState({ connMenu: null });
+    if (!cm) return;
+    this.setState(st => ({
+      deletedConns: [...st.deletedConns, cm.connId],
+      activeConn: st.activeConn === cm.connId ? null : st.activeConn,
+      connected: st.activeConn === cm.connId ? false : st.connected,
+    }));
+  };
+  onRetry = () => { if (!this.live()) return; const c = this._pending; this.setState({ error: null }); if (c) this.connect(c); };
+  onDismissError = () => { if (!this.live()) return; this.setState({ error: null }); };
+
+  // ---------- sort ----------
+  sort(key) { if (!this.live()) return; this.setState(s => ({ sortKey: key, sortDir: s.sortKey === key && s.sortDir === 'asc' ? 'desc' : 'asc' })); }
+  onSortName = () => this.sort('name');
+  onSortSize = () => this.sort('size');
+  onSortDate = () => this.sort('date');
+  onSortPerm = () => this.sort('perm');
+
+  // ---------- selection / menu / download ----------
+  rowClick = (e) => { if (!this.live()) return; this.setState({ selection: [e.name] }); };
+  rowMenu = (ev, e) => {
+    if (!this.live()) { ev.preventDefault(); return; }
+    ev.preventDefault();
+    const r = this._root ? this._root.getBoundingClientRect() : { left: 0, top: 0 };
+    let x = ev.clientX - r.left, y = ev.clientY - r.top;
+    x = Math.min(x, 900 - 182); y = Math.min(y, 600 - 120);
+    this.setState({ selection: [e.name], menu: { file: e, x, y } });
+  };
+  onCloseMenu = () => this.setState({ menu: null });
+  onDownload = () => {
+    const e = this.state.menu && this.state.menu.file;
+    this.setState({ menu: null });
+    if (e) this.startTransfer(e);
+  };
+  startTransfer(e) {
+    const id = ++this._tid;
+    this.setState(s => ({ queueOpen: true, transfers: [{ id, name: e.name, dir: 'down', progress: 0, status: 'Queued', speed: '' }, ...s.transfers] }));
+    let started = false;
+    const iv = setInterval(() => {
+      this.setState(s => {
+        const transfers = s.transfers.map(t => {
+          if (t.id !== id) return t;
+          if (t.status === 'Paused') return t;
+          const np = Math.min(100, t.progress + (started ? 6 + Math.random() * 13 : 3));
+          started = true;
+          const done = np >= 100;
+          return { ...t, progress: np, status: done ? 'Completed' : 'Downloading', speed: done ? '' : (1.4 + Math.random() * 2.2).toFixed(1) + ' MB/s' };
+        });
+        if (transfers.find(t => t.id === id).progress >= 100) clearInterval(iv);
+        return { transfers };
+      });
+    }, 420);
+    this._ivs.push(iv);
+  }
+  togglePause = (id) => {
+    if (!this.live()) return;
+    this.setState(s => ({
+      transfers: s.transfers.map(t => {
+        if (t.id !== id) return t;
+        if (t.status === 'Completed' || t.status === 'Failed') return t;
+        return t.status === 'Paused'
+          ? { ...t, status: 'Downloading' }
+          : { ...t, status: 'Paused', speed: '' };
+      }),
+    }));
+  };
+  onToggleQueue = () => { if (!this.live()) return; this.setState(s => ({ queueOpen: !s.queueOpen })); };
+  onClearCompleted = () => { if (!this.live()) return; this.setState(s => ({ transfers: s.transfers.filter(t => t.status !== 'Completed') })); };
+
+  // ---------- sheet ----------
+  onOpenSheet = () => { if (!this.live()) return; this.setState({ sheetOpen: true, sheetEditId: null, sheet: { name: '', host: '', port: '22', user: '', pass: '' } }); };
+  onCloseSheet = () => { if (!this.live()) return; this.setState({ sheetOpen: false }); };
+  onSaveSheet = () => {
+    if (!this.live()) return;
+    const s = this.state.sheet;
+    if (this.state.sheetEditId) {
+      this.setState(st => ({ sheetOpen: false, connOverrides: { ...st.connOverrides, [st.sheetEditId]: { name: s.name, host: s.host, user: s.user } } }));
+    } else {
+      const id = 'conn-' + Date.now();
+      this.setState(st => ({ sheetOpen: false, addedConns: [...st.addedConns, { id, name: s.name || 'New Server', host: s.host, user: s.user, status: 'off' }] }));
+    }
+  };
+  sheetField(k) { return (e) => this.setState(s => ({ sheet: { ...s.sheet, [k]: e.target.value } })); }
+  onSheetName = this.sheetField('name'); onSheetHost = this.sheetField('host'); onSheetPort = this.sheetField('port'); onSheetUser = this.sheetField('user'); onSheetPass = this.sheetField('pass');
+
+  setRoot = (el) => { this._root = el; };
+
+  // ---------- crumbs ----------
+  buildCrumbs() {
+    const host = this.activeConnObj().host;
+    const parts = this.state.path.split('/').filter(Boolean);
+    const out = [{ label: host, seg: -1 }];
+    let acc = '';
+    parts.forEach((p, i) => { acc += '/' + p; out.push({ label: p, seg: acc }); });
+    return out.map((c, i) => ({
+      label: c.label,
+      sep: i < out.length - 1,
+      style: `cursor:${this.live() ? 'pointer' : 'default'};white-space:nowrap;color:${i === out.length - 1 ? 'var(--text)' : 'var(--text2)'};font-weight:${i === out.length - 1 ? 600 : 500}`,
+      onClick: () => { if (this.live()) this.navTo(c.seg === -1 ? '/' : c.seg); },
+    }));
+  }
+
+  // ---------- ext meta ----------
+  extMeta(name) {
+    const dot = name.lastIndexOf('.');
+    let ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : (name.startsWith('.') ? name.slice(1) : 'txt');
+    const map = {
+      sh: ['SH', '#8e44ad'], md: ['MD', '#3b6fb5'], txt: ['TXT', '#7a7a80'], png: ['PNG', '#e07b39'], jpg: ['JPG', '#e07b39'],
+      sql: ['SQL', '#c0562b'], gz: ['GZ', '#5a6b7a'], html: ['HTML', '#e0603a'], css: ['CSS', '#2f77c4'], js: ['JS', '#c9a227'],
+      json: ['JSON', '#c9a227'], log: ['LOG', '#5a6b7a'], htaccess: ['CFG', '#7a7a80'], bashrc: ['CFG', '#7a7a80'], tmp: ['TMP', '#7a7a80'],
+    };
+    const m = map[ext] || [ext.slice(0, 3).toUpperCase(), '#7a7a80'];
+    return { label: m[0], color: m[1] };
+  }
+
+  // ---------- render ----------
+  renderVals() {
+    const v = this.palette;
+    const st = this.state;
+    const connected = st.connected;
+    const showListArea = connected && !st.browseError;
+    // files
+    let raw = this.entries(st.path).slice();
+    const dir = st.sortDir === 'asc' ? 1 : -1;
+    raw.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+      let r = 0;
+      if (st.sortKey === 'name') r = a.name.localeCompare(b.name);
+      else if (st.sortKey === 'size') r = a.sizeB - b.sizeB;
+      else if (st.sortKey === 'date') r = a.dateS - b.dateS;
+      else r = a.perm.localeCompare(b.perm);
+      return r * dir;
+    });
+    const files = raw.map(e => {
+      const sel = st.selection.includes(e.name);
+      const em = e.type === 'file' ? this.extMeta(e.name) : null;
+      return {
+        name: e.name, isDir: e.type === 'dir', isFile: e.type === 'file',
+        size: e.size, date: e.date, perm: e.perm,
+        extLabel: em ? em.label : '', extColor: em ? em.color : '#7a7a80',
+        rowStyle: `display:flex;align-items:center;height:30px;cursor:default;background:${sel ? 'var(--sel)' : 'transparent'};color:${sel ? 'var(--selText)' : 'var(--text)'}`,
+        metaColor: sel ? 'var(--selText)' : 'var(--text2)',
+        onClick: () => this.rowClick(e),
+        onOpen: () => this.openEntry(e),
+        onMenu: (ev) => this.rowMenu(ev, e),
+      };
+    });
+
+    // connections
+    const connections = this.CONNS.map(c => {
+      const active = st.activeConn === c.id;
+      const connGreen = st.connected && active;
+      return {
+        name: c.name, host: c.host,
+        rowStyle: `display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:${this.live() ? 'pointer' : 'default'};margin-bottom:1px;background:${active ? 'var(--sel)' : 'transparent'};color:${active ? '#fff' : 'var(--text)'}`,
+        dotStyle: `width:8px;height:8px;border-radius:50%;flex:none;background:${connGreen ? '#30d158' : '#8e8e93'};box-shadow:${connGreen ? '0 0 5px rgba(48,209,88,0.8)' : 'none'}`,
+        hostStyle: `font-size:11px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${active ? 'rgba(255,255,255,0.8)' : 'var(--text2)'}`,
+        onClick: () => this.selectConn(c),
+        onOpen: () => this.connect(c),
+        onMenu: (ev) => this.connMenuOpen(ev, c),
+      };
+    });
+
+    // transfers
+    const transfers = st.transfers.map(t => {
+      const done = t.status === 'Completed';
+      const failed = t.status === 'Failed';
+      const paused = t.status === 'Paused';
+      const canPause = !done && !failed;
+      return {
+        name: t.name,
+        status: failed ? (t.errorDetail || 'Failed') : t.status,
+        speed: (done || failed || paused) ? '' : t.speed,
+        statusColor: done ? '#30d158' : failed ? '#ff453a' : paused ? '#ff9f0a' : 'var(--text2)',
+        pct: t.progress + '%',
+        barColor: done ? '#30d158' : failed ? '#ff453a' : paused ? '#ff9f0a' : 'var(--accent)',
+        canPause, paused, playing: canPause && !paused,
+        pauseTitle: paused ? 'Resume' : 'Pause',
+        onTogglePause: () => this.togglePause(t.id),
+        dirStyle: failed
+          ? 'width:22px;height:22px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;background:rgba(255,69,58,0.14);color:#ff453a'
+          : paused
+          ? 'width:22px;height:22px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;background:rgba(255,159,10,0.16);color:#ff9f0a'
+          : 'width:22px;height:22px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;background:rgba(10,132,255,0.14);color:var(--accent)',
+      };
+    });
+    const activeCount = st.transfers.filter(t => t.status !== 'Completed').length;
+    const doneCount = st.transfers.filter(t => t.status === 'Completed').length;
+
+    // error
+    const err = st.error;
+    const errorMap = {
+      timeout: { title: 'Couldn’t connect to the server', body: (err ? err.host : '') + ' didn’t respond. The connection timed out.' },
+      auth: { title: 'Authentication failed', body: 'The username or password for ' + (err ? err.host : '') + ' is incorrect.' },
+    };
+    const errCfg = err ? (errorMap[err.kind] || { title: 'Connection error', body: 'Something went wrong.' }) : {};
+
+    // empty states
+    let showEmpty = false, emptyTitle = '', emptyBody = '', emptyGlyph = '', emptyIconStyle = '';
+    if (!connected) { showEmpty = true; emptyTitle = 'Not Connected'; emptyBody = 'Select a server in the sidebar to connect.'; emptyGlyph = '⇄'; }
+    else if (st.browseError === 'perm') { showEmpty = true; emptyTitle = 'Permission Denied'; emptyBody = 'You don’t have permission to view the contents of this folder.'; emptyGlyph = '⃠'; }
+    else if (showListArea && files.length === 0) { showEmpty = true; emptyTitle = 'Empty Folder'; emptyBody = 'This folder has no items.'; emptyGlyph = '⌀'; }
+    emptyIconStyle = 'width:66px;height:66px;border-radius:16px;background:rgba(128,128,128,0.12);display:flex;align-items:center;justify-content:center;font-size:30px;color:var(--text2)';
+
+    // pins
+    const pins = (this.props.callouts || []).map(p => ({
+      n: p.n,
+      style: `position:absolute;z-index:60;top:${p.top}px;left:${p.left}px;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.35),0 0 0 3px rgba(255,255,255,0.85);font-family:-apple-system,system-ui,sans-serif`,
+    }));
+
+    const arrow = (k) => st.sortKey === k ? (st.sortDir === 'asc' ? '▲' : '▼') : '';
+
+    return {
+      v,
+      connected,
+      showList: showListArea && files.length > 0,
+      showEmpty,
+      emptyTitle, emptyBody, emptyGlyph, emptyIconStyle,
+      files, connections, transfers,
+      crumbs: connected && !showEmpty ? this.buildCrumbs() : [],
+      itemCount: (showListArea ? files.length : 0) + ' items',
+      nameArrow: arrow('name'), sizeArrow: arrow('size'), dateArrow: arrow('date'), permArrow: arrow('perm'),
+      refreshSpin: st.refreshing ? 'animation:ferri-spin 0.65s linear infinite;transform-origin:center' : '',
+      connecting: st.connecting,
+      queueOpen: st.queueOpen,
+      queueSummary: st.transfers.length ? (activeCount + ' active · ' + doneCount + ' completed') : 'No transfers',
+      transferBadge: activeCount > 0 ? String(activeCount) : '',
+      menu: { show: !!st.menu, x: (st.menu ? st.menu.x : 0) + 'px', y: (st.menu ? st.menu.y : 0) + 'px' },
+      sidebarStyle: `width:${st.sidebarCollapsed ? 0 : 220}px;flex:none;background:var(--sidebar);border-right:0.5px solid var(--sep);display:flex;flex-direction:column;overflow:hidden;transition:width 0.18s ease`,
+      onToggleSidebar: this.onToggleSidebar,
+      connMenu: { show: !!st.connMenu, x: (st.connMenu ? st.connMenu.x : 0) + 'px', y: (st.connMenu ? st.connMenu.y : 0) + 'px' },
+      sheetOpen: st.sheetOpen, sheet: st.sheet, sheetTitle: st.sheetEditId ? 'Edit Server' : 'Add Server',
+      error: { show: !!err, title: errCfg.title, body: errCfg.body },
+      pins,
+      // handlers
+      onBack: this.onBack, onForward: this.onForward, onUp: this.onUp, onRefresh: this.onRefresh,
+      onSortName: this.onSortName, onSortSize: this.onSortSize, onSortDate: this.onSortDate, onSortPerm: this.onSortPerm,
+      onToggleQueue: this.onToggleQueue, onClearCompleted: this.onClearCompleted,
+      onOpenSheet: this.onOpenSheet, onCloseSheet: this.onCloseSheet, onSaveSheet: this.onSaveSheet,
+      onSheetName: this.onSheetName, onSheetHost: this.onSheetHost, onSheetPort: this.onSheetPort, onSheetUser: this.onSheetUser, onSheetPass: this.onSheetPass,
+      onCloseMenu: this.onCloseMenu, onDownload: this.onDownload,
+      onCloseConnMenu: this.onCloseConnMenu, onConnMenuConnect: this.onConnMenuConnect, onConnMenuDisconnect: this.onConnMenuDisconnect, onConnMenuEdit: this.onConnMenuEdit, onConnMenuDelete: this.onConnMenuDelete,
+      onRetry: this.onRetry, onDismissError: this.onDismissError,
+      setRoot: this.setRoot,
+    };
+  }
+}
+</script>
+</body>
+</html>

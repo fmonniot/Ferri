@@ -40,7 +40,6 @@
 - Context menu: Connect, Edit, Delete
 
 #### Toolbar
-- Quick Connect: Text field + Connect button
 - Navigation: Back, Forward, Up one level, Refresh buttons
 
 #### Remote File Browser
@@ -64,7 +63,6 @@
 1. **Connection Management** (Priority: High)
    - Add, edit, delete saved connections
    - Store connections in Property List file
-   - Quick connect with inline toolbar field
 
 2. **Remote File Browser** (Priority: High)
    - List remote files/folders in table view
@@ -81,16 +79,13 @@
 
 ### 3.2 User Flows
 
-1. **Quick Connect Flow**:
-   - Enter host/username/password in toolbar → Click Connect → Browse files
-
-2. **Saved Connection Flow**:
+1. **Saved Connection Flow**:
    - Select saved connection in sidebar → Click/double-click → Connect → Browse
 
-3. **Upload Flow**:
+2. **Upload Flow**:
    - Select folder in browser → Drag files from Finder → Show in transfer queue → Complete
 
-4. **Download Flow**:
+3. **Download Flow**:
    - Select files in browser → Drag to Finder → Show in transfer queue → Complete
 
 ### 3.3 Architecture (MVVM)
