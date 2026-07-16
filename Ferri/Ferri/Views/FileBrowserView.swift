@@ -1,21 +1,13 @@
 import SwiftUI
-import UniformTypeIdentifiers
 import FTPClient
 
 struct FileBrowserView: View {
     @ObservedObject var viewModel: FileBrowserViewModel
     @ObservedObject var transferQueue: TransferQueueViewModel
     let isConnected: Bool
-    
+
     @State private var selectedFiles: Set<RemoteFile.ID> = []
-    @State private var showingNewFolderSheet = false
-    @State private var newFolderName = ""
-    @State private var showingRenameAlert = false
-    @State private var renameFile: RemoteFile?
-    @State private var newFileName = ""
-    @State private var showingDeleteAlert = false
-    @State private var deleteFile: RemoteFile?
-    
+
     var body: some View {
         VStack(spacing: 0) {
             if !isConnected {
@@ -55,63 +47,12 @@ struct FileBrowserView: View {
             
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Button("New Folder") {
-                        showingNewFolderSheet = true
-                    }
                     Button("Refresh") {
                         Task { await viewModel.refresh() }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-            }
-        }
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-            handleDrop(providers: providers)
-        }
-        .alert("New Folder", isPresented: $showingNewFolderSheet) {
-            TextField("Folder name", text: $newFolderName)
-            Button("Cancel", role: .cancel) {
-                newFolderName = ""
-            }
-            Button("Create") {
-                Task {
-                    try? await viewModel.createFolder(named: newFolderName)
-                    newFolderName = ""
-                }
-            }
-        }
-        .alert("Rename", isPresented: $showingRenameAlert) {
-            TextField("New name", text: $newFileName)
-            Button("Cancel", role: .cancel) {
-                renameFile = nil
-                newFileName = ""
-            }
-            Button("Rename") {
-                if let file = renameFile {
-                    Task {
-                        try? await viewModel.renameFile(file, to: newFileName)
-                        renameFile = nil
-                        newFileName = ""
-                    }
-                }
-            }
-        }
-        .alert("Delete", isPresented: $showingDeleteAlert) {
-            Button("Cancel", role: .cancel) {
-                deleteFile = nil
-            }
-            Button("Delete", role: .destructive) {
-                if let file = deleteFile {
-                    Task {
-                        try? await viewModel.deleteFile(file)
-                        deleteFile = nil
-                    }
-                }
-            }
-        } message: {
-            if let file = deleteFile {
-                Text("Are you sure you want to delete \"\(file.name)\"?")
             }
         }
     }
@@ -216,16 +157,6 @@ struct FileBrowserView: View {
                         downloadFile(file)
                     }
                 }
-                Divider()
-                Button("Rename") {
-                    renameFile = file
-                    newFileName = file.name
-                    showingRenameAlert = true
-                }
-                Button("Delete", role: .destructive) {
-                    deleteFile = file
-                    showingDeleteAlert = true
-                }
             }
         } primaryAction: { items in
             if let fileId = items.first,
@@ -240,49 +171,6 @@ struct FileBrowserView: View {
     
     private var filesTableItems: [RemoteFile] {
         viewModel.files
-    }
-    
-    private func handleDrop(providers: [NSItemProvider]) -> Bool {
-        guard isConnected else { return false }
-        
-        let currentPath = viewModel.currentPath
-        for provider in providers {
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
-                guard let data = item as? Data,
-                      let url = URL(dataRepresentation: data, relativeTo: nil) else {
-                    return
-                }
-                
-                let fileName = url.lastPathComponent
-                let destinationPath = currentPath.hasSuffix("/")
-                    ? currentPath + fileName
-                    : currentPath + "/" + fileName
-                
-                var attributes: [FileAttributeKey: Any]?
-                do {
-                    attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                } catch {
-                    print("Error getting file attributes: \(error)")
-                }
-                
-                let fileSize = (attributes?[.size] as? Int64) ?? 0
-                
-                let transferItem = TransferItem(
-                    fileName: fileName,
-                    localPath: url.path,
-                    remotePath: destinationPath,
-                    direction: .upload,
-                    fileSize: fileSize,
-                    status: .failed
-                )
-                
-                DispatchQueue.main.async {
-                    transferQueue.addTransfer(transferItem)
-                }
-            }
-        }
-        
-        return true
     }
     
     private func downloadFile(_ file: RemoteFile) {

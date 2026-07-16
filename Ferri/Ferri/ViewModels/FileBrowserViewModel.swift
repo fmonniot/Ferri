@@ -146,18 +146,6 @@ final class FileBrowserViewModel: ObservableObject {
         }
     }
     
-    func createFolder(named name: String) async throws {
-        throw FTPClientError.connectionFailed("Creating directories is not supported")
-    }
-    
-    func deleteFile(_ file: RemoteFile) async throws {
-        throw FTPClientError.connectionFailed("Deleting files is not supported")
-    }
-    
-    func renameFile(_ file: RemoteFile, to newName: String) async throws {
-        throw FTPClientError.connectionFailed("Renaming files is not supported")
-    }
-    
     func downloadFile(_ file: RemoteFile, to localURL: URL, transferQueue: TransferQueueViewModel) {
         let item = TransferItem(
             fileName: file.name,
