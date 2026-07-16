@@ -20,14 +20,17 @@ final class TransferQueueViewModel: ObservableObject {
         transfers.append(newItem)
     }
     
-    func updateTransfer(id: UUID, status: TransferStatus? = nil, bytesTransferred: Int64? = nil, errorMessage: String? = nil) {
+    func updateTransfer(id: UUID, status: TransferStatus? = nil, bytesTransferred: Int64? = nil, bytesPerSecond: Double? = nil, errorMessage: String? = nil) {
         guard let index = transfers.firstIndex(where: { $0.id == id }) else { return }
-        
+
         if let status = status {
             transfers[index].status = status
         }
         if let bytesTransferred = bytesTransferred {
             transfers[index].bytesTransferred = bytesTransferred
+        }
+        if let bytesPerSecond = bytesPerSecond {
+            transfers[index].bytesPerSecond = bytesPerSecond
         }
         if let errorMessage = errorMessage {
             transfers[index].errorMessage = errorMessage

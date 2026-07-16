@@ -95,10 +95,16 @@ struct TransferRow: View {
                 if transfer.status == .inProgress {
                     ProgressView(value: transfer.progress)
                         .progressViewStyle(.linear)
-                    
-                    Text(transfer.formattedProgress)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+
+                    HStack(spacing: 4) {
+                        Text(transfer.formattedProgress)
+                        if let speed = transfer.formattedSpeed {
+                            Text("·")
+                            Text(speed)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 } else if let error = transfer.errorMessage {
                     Text(error)
                         .font(.caption)

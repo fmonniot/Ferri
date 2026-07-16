@@ -71,11 +71,13 @@ final class MockFTPClient: FTPClientProtocol, @unchecked Sendable {
         try await changeDirectory(to: "..")
     }
 
-    func downloadFile(named fileName: String, to localURL: URL) async throws {
+    func downloadFile(named fileName: String, to localURL: URL, progress: (@Sendable (Int64, Int64?) -> Void)?) async throws {
         downloadCalls.append((fileName, localURL))
         if shouldFailDownload { throw downloadError }
         // Create a dummy file so tests can verify the file exists
-        try "mock content".write(to: localURL, atomically: true, encoding: .utf8)
+        let content = "mock content"
+        progress?(Int64(content.utf8.count), Int64(content.utf8.count))
+        try content.write(to: localURL, atomically: true, encoding: .utf8)
     }
 
     func listDirectoryRecursively(at path: String) async throws -> [RemoteFile] {

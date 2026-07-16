@@ -77,11 +77,13 @@ public final class FTPClient: FTPClientProtocol, @unchecked Sendable {
         try await changeDirectory(to: "..")
     }
 
-    public func downloadFile(named fileName: String, to localURL: URL) async throws {
+    public func downloadFile(named fileName: String, to localURL: URL, progress: (@Sendable (Int64, Int64?) -> Void)? = nil) async throws {
         logger.debug("downloadFile(named: \(fileName)) called")
         guard let client = client else { throw FTPClientError.notConnected }
 
-        try await client.downloadToFile(remotePath: fileName, localURL: localURL)
+        try await client.downloadToFile(remotePath: fileName, localURL: localURL) { bytesWritten, totalSize in
+            progress?(Int64(bytesWritten), totalSize.map { Int64($0) })
+        }
     }
 
     /// Recursively lists all files (not directories) under the given path.

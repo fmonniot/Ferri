@@ -156,12 +156,20 @@ final class FileBrowserViewModel: ObservableObject {
             status: .queued
         )
         transferQueue.addTransfer(item)
-        
+
         Task {
+            let startTime = Date()
             do {
-                try await ftpClient.downloadFile(named: file.name, to: localURL)
+                try await ftpClient.downloadFile(named: file.name, to: localURL) { bytesTransferred, _ in
+                    Task { @MainActor in
+                        let elapsed = Date().timeIntervalSince(startTime)
+                        let speed = elapsed > 0 ? Double(bytesTransferred) / elapsed : nil
+                        transferQueue.updateTransfer(id: item.id, bytesTransferred: bytesTransferred, bytesPerSecond: speed)
+                    }
+                }
+                transferQueue.updateTransfer(id: item.id, status: .completed)
             } catch {
-                print("Download failed: \(error)")
+                transferQueue.updateTransfer(id: item.id, status: .failed, errorMessage: error.localizedDescription)
             }
         }
     }

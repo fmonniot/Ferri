@@ -22,8 +22,9 @@ struct TransferItem: Identifiable, Codable {
     let fileSize: Int64
     var status: TransferStatus
     var bytesTransferred: Int64
+    var bytesPerSecond: Double?
     var errorMessage: String?
-    
+
     init(
         id: UUID = UUID(),
         fileName: String,
@@ -33,6 +34,7 @@ struct TransferItem: Identifiable, Codable {
         fileSize: Int64 = 0,
         status: TransferStatus = .queued,
         bytesTransferred: Int64 = 0,
+        bytesPerSecond: Double? = nil,
         errorMessage: String? = nil
     ) {
         self.id = id
@@ -43,6 +45,7 @@ struct TransferItem: Identifiable, Codable {
         self.fileSize = fileSize
         self.status = status
         self.bytesTransferred = bytesTransferred
+        self.bytesPerSecond = bytesPerSecond
         self.errorMessage = errorMessage
     }
     
@@ -59,5 +62,11 @@ struct TransferItem: Identifiable, Codable {
     
     var directionIcon: String {
         direction == .upload ? "arrow.up.circle" : "arrow.down.circle"
+    }
+
+    var formattedSpeed: String? {
+        guard let bytesPerSecond, bytesPerSecond > 0 else { return nil }
+        let formatted = ByteCountFormatter.string(fromByteCount: Int64(bytesPerSecond), countStyle: .file)
+        return "\(formatted)/s"
     }
 }
