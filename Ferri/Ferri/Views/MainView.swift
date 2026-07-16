@@ -26,7 +26,7 @@ struct MainView: View {
                 onDisconnect: disconnect
             )
         } detail: {
-            VStack(spacing: 0) {
+            VSplitView {
                 ZStack {
                     FileBrowserView(
                         viewModel: fileBrowserViewModel,
@@ -39,6 +39,7 @@ struct MainView: View {
                         connectingOverlay(host: connectingServer.displayName)
                     }
                 }
+                .frame(minHeight: 200, maxHeight: .infinity)
 
                 TransferQueueView(
                     viewModel: transferQueueViewModel,
@@ -146,11 +147,30 @@ struct MainView: View {
             } catch {
                 isConnected = false
                 connectingServer = nil
-                errorMessage = error.localizedDescription
+                let message = friendlyConnectionError(error)
+                errorMessage = message
                 failedServer = server
                 showingError = true
-                connectionViewModel.setConnectionStatus(.error(error.localizedDescription), for: server.id)
+                connectionViewModel.setConnectionStatus(.error(message), for: server.id)
             }
+        }
+    }
+
+    /// Map low-level SFTP errors to the short, cause-specific copy the design calls for
+    /// (timeout vs. authentication) instead of surfacing a raw `localizedDescription`.
+    private func friendlyConnectionError(_ error: Error) -> String {
+        guard let sftpError = error as? SFTPClientError else {
+            return error.localizedDescription
+        }
+        switch sftpError {
+        case .authenticationFailed:
+            return "Authentication failed. Check your username, password, or key."
+        case .timeout, .connectionFailed, .channelClosed:
+            return "Couldn't connect to the server. Check the host and port, then try again."
+        case .notConnected:
+            return "The connection was lost. Try connecting again."
+        case .subsystemOpenFailed, .requestFailed, .invalidResponse:
+            return sftpError.description
         }
     }
 

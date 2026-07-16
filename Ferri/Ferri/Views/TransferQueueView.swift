@@ -55,7 +55,12 @@ struct TransferQueueView: View {
                 }
             }
         }
-        .frame(height: isExpanded ? 200 : 44)
+        // Collapsed: pinned to the 44pt header. Expanded: a resizable pane the enclosing
+        // VSplitView divider can drag between a sensible minimum and the available height.
+        .frame(
+            minHeight: isExpanded ? 120 : 44,
+            maxHeight: isExpanded ? .infinity : 44
+        )
     }
     
     private var emptyView: some View {

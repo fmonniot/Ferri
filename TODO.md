@@ -12,10 +12,10 @@ Manual written known issue:
 - No "selection" of file (e.g. click on file doesn't change its background to blue/text to white)
 - Make sure we have a test for download integrity (e.g. file on server has same hash as file downloaded)
 
-- AGENTS.md file.
-    - Add "use xcode MCP over any CLI tool whenever you have the chance"
+- ~~AGENTS.md file~~ → consolidated into CLAUDE.md instead (no separate AGENTS.md):
+    - "use xcode MCP over any CLI tool whenever you have the chance" — CLAUDE.md "Commands" section.
         - Super useful to avoid issue with swift packages
-    - Also add the scope of the project
+    - Scope of the project — CLAUDE.md "Project scope" section.
         - not a full fledge FTP server, only one use for browsing/download.
         - No support for operations that modify remote objects)
 
@@ -227,3 +227,60 @@ design* and should be removed, not finished.
       design) — that's a fine superset; only cosmetic divergence is the title ("New Connection" vs "Add
       Server") and primary button label ("Save" vs "Connect"). Low priority, no action needed unless aligning
       copy.
+
+=====
+
+## Verification — session plan completion (2026-07-15)
+
+Verified sections A–I (sessions 1–6) against the actual code; the Ferri app **builds successfully**
+(`BuildProject` via Xcode MCP) and the pause/resume + progress work is covered by unit tests
+(`TransferQueueViewModelTests`) and the `downloadResumesFromOffset` integration test.
+
+**Done and confirmed in code:**
+
+- **A** (transfer queue) — progress plumbing (`resumeOffset` + `progress` threaded through
+  `FTPClientProtocol` → `SFTPClient.downloadToFile`), speed field, queue summary, toolbar Transfers
+  toggle + badge, colored direction badges, and real stream-interrupting pause/resume in
+  `TransferQueueViewModel`. Complete.
+- **B** (remove out-of-scope mutation UI) — **actually done in code** but the checkboxes above were
+  left unchecked. `FileBrowserView` has no Rename/Delete context items, no "New Folder" toolbar entry,
+  and no `.onDrop`/`handleDrop` upload path; the stubbed `createFolder/deleteFile/renameFile` VM
+  methods are gone. → mark B's three items `[x]`.
+- **C** (Get Info / Copy Path), **D** (breadcrumb bar + item count), **E** (colored ext badges + row
+  selection highlight) — all present in `FileBrowserView`.
+- **F** — Connecting overlay, error-alert **Retry**, and a dedicated Permission Denied state all
+  present in `MainView`/`FileBrowserView`.
+- **G** — context-menu Connect wired, Disconnect added (`FTPClient.disconnect()`), connect fires on
+  double-click / context-menu with single-click = select only; `autoConnect` calls `connect` directly.
+- **H** — `.newConnection`/`.refresh`/`.navigateBack`/`.navigateForward`/`.navigateUp` observers in
+  `MainView`; ⌘N/⌘R/⌘[/⌘]/⌘↑ bound in `FerriApp`.
+
+### Gaps addressed (2026-07-15, follow-up session)
+
+All four concrete gaps below were fixed; the app builds and all 39 `FerriTests` pass.
+
+1. **[x] F — cause-specific connection error text.** `MainView.friendlyConnectionError(_:)` now maps
+   `SFTPClientError` to short copy: `.authenticationFailed` → "Authentication failed. Check your
+   username, password, or key."; `.timeout`/`.connectionFailed`/`.channelClosed` → "Couldn't connect
+   to the server. Check the host and port, then try again." Other cases fall back to the error's
+   description. Both the error alert and the sidebar error status use this message.
+2. **[x] E — sortable column headers wired to the VM.** `FileBrowserView`'s `Table` is now
+   `Table(_, selection:, sortOrder:)` with all four columns `.sortable` (so macOS renders the native
+   ▲/▼ header affordance). `onChange(of: sortComparators)` translates the native comparator into
+   `FileBrowserViewModel.applySort(column:ascending:)` (new non-toggling method), keeping the VM the
+   single source of truth so directories stay sorted before files. The "Date Modified" column sorts on
+   a new `RemoteFile.sortDate` helper (`modificationDate ?? .distantPast`) since `Date?` isn't
+   `Comparable`. Existing `sortBy`-based unit tests remain green.
+3. **[x] AGENTS.md — resolved by consolidating on `CLAUDE.md`** (per the user note). No separate
+   `AGENTS.md`; `CLAUDE.md` already carries the "prefer Xcode MCP over CLI" guidance and the
+   browse/download-only scope.
+4. **[x] VSplitView.** The detail pane's `VStack` is now a `VSplitView`, so the transfer queue is a
+   user-resizable pane when expanded (draggable divider, `minHeight` 120). Collapsed, the queue stays
+   pinned to its 44pt header (`TransferQueueView` frame min==max==44).
+
+### Still open (out of scope of the A–I session plan)
+
+- Top-of-file manual notes not assigned to any session and left untouched: actor naming convention
+  (`FTPClient`/`SFTPClient` suffix), data-channel receive timeout, and the Finder completion-status
+  icon (needs verifying once download speed work lands). These are deeper protocol/architecture items,
+  not UI wiring — flag before tackling.

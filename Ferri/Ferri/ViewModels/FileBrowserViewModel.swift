@@ -115,6 +115,14 @@ final class FileBrowserViewModel: ObservableObject {
         }
         files = sortFiles(files)
     }
+
+    /// Apply an explicit column + direction (as opposed to `sortBy`'s toggle-on-repeat behavior).
+    /// Used by the file table's native sortable headers, which already carry their own direction.
+    func applySort(column: SortColumn, ascending: Bool) {
+        sortColumn = column
+        sortOrder = ascending ? .ascending : .descending
+        files = sortFiles(files)
+    }
     
     private func sortFiles(_ files: [RemoteFile]) -> [RemoteFile] {
         let sorted = files.sorted { file1, file2 in

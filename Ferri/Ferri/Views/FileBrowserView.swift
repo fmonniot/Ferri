@@ -9,6 +9,9 @@ struct FileBrowserView: View {
 
     @State private var selectedFiles: Set<RemoteFile.ID> = []
     @State private var infoFile: RemoteFile?
+    @State private var sortComparators: [KeyPathComparator<RemoteFile>] = [
+        KeyPathComparator(\.name, order: .forward)
+    ]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -211,8 +214,8 @@ struct FileBrowserView: View {
     }
 
     private var fileTableView: some View {
-        Table(filesTableItems, selection: $selectedFiles) {
-            TableColumn("Name") { file in
+        Table(filesTableItems, selection: $selectedFiles, sortOrder: $sortComparators) {
+            TableColumn("Name", value: \.name) { file in
                 rowCell(isSelected: selectedFiles.contains(file.id)) {
                     HStack(spacing: 8) {
                         fileIcon(for: file)
@@ -225,7 +228,7 @@ struct FileBrowserView: View {
             }
             .width(min: 200, ideal: 300)
 
-            TableColumn("Size") { file in
+            TableColumn("Size", value: \.size) { file in
                 rowCell(isSelected: selectedFiles.contains(file.id), unselectedColor: .secondary) {
                     Text(file.formattedSize)
                         .monospacedDigit()
@@ -233,20 +236,23 @@ struct FileBrowserView: View {
             }
             .width(80)
 
-            TableColumn("Date Modified") { file in
+            TableColumn("Date Modified", value: \.sortDate) { file in
                 rowCell(isSelected: selectedFiles.contains(file.id), unselectedColor: .secondary) {
                     Text(file.formattedDate)
                 }
             }
             .width(150)
 
-            TableColumn("Permissions") { file in
+            TableColumn("Permissions", value: \.permissions) { file in
                 rowCell(isSelected: selectedFiles.contains(file.id), unselectedColor: .secondary) {
                     Text(file.permissions)
                         .font(.system(.body, design: .monospaced))
                 }
             }
             .width(100)
+        }
+        .onChange(of: sortComparators) { _, comparators in
+            applySort(comparators)
         }
         .contextMenu(forSelectionType: RemoteFile.ID.self) { items in
             if let fileId = items.first,
@@ -322,6 +328,29 @@ struct FileBrowserView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(file.path, forType: .string)
     }
+
+    /// Translate the table's native sort comparator into a VM sort so the view model stays the
+    /// single source of truth (it keeps directories sorted before files regardless of column).
+    private func applySort(_ comparators: [KeyPathComparator<RemoteFile>]) {
+        guard let comparator = comparators.first else { return }
+
+        let column: SortColumn
+        switch comparator.keyPath {
+        case \RemoteFile.name: column = .name
+        case \RemoteFile.size: column = .size
+        case \RemoteFile.sortDate: column = .date
+        case \RemoteFile.permissions: column = .permissions
+        default: return
+        }
+
+        viewModel.applySort(column: column, ascending: comparator.order == .forward)
+    }
+}
+
+private extension RemoteFile {
+    /// A non-optional sort key for the "Date Modified" column; `KeyPathComparator` needs a
+    /// `Comparable` key path and `Date?` is not comparable. Missing dates sort oldest-first.
+    var sortDate: Date { modificationDate ?? .distantPast }
 }
 
 // MARK: - File type badge
