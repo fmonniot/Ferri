@@ -131,27 +131,21 @@ design* and should be removed, not finished.
 
 ### A. Transfer queue (biggest gaps — "Pause & resume" is a headline feature)
 
-- [ ] **Pause / Resume per transfer is entirely missing.** Design shows a play/pause button on each active
-      row and a `Paused` (orange) state. App has no such control: `TransferStatus`
-      (`Models/TransferItem.swift`) has no `.paused` case, and `TransferQueueView` renders no pause button.
-      This is a masthead-advertised feature.
-- [ ] **Live progress never updates.** `FileBrowserViewModel.downloadFile` starts the download task but never
-      wires `SFTPClient.downloadToFile(..., progress:)` (which exists,
-      `FTPClient/Sources/FTPClient/SFTPClient.swift:300`) into the `TransferItem`. The facade
-      `FTPClient.downloadFile(named:to:)` (`FTPClient.swift:80`) doesn't even take a progress closure, and
-      `FTPClientProtocol` has no progress-capable download. Result: the progress bar stays at 0 and status
-      never flips to `.completed`/`.failed`. (Overlaps manual TODO "No transfer entry in the transfer pane"
-      and "Finder completion status icon".)
-- [ ] **Transfer speed is not shown.** Design shows e.g. "1.8 MB/s" per row. `TransferItem` has no speed
-      field and `TransferRow` renders none. Needs a throughput field fed by the progress callback.
-- [ ] **Queue summary text missing.** Design shows "N active · N completed" next to the "Transfers" title;
-      app shows only the "Transfers" headline (with Clear Completed / Cancel All).
-- [ ] **Toolbar "Transfers" toggle + active-count badge missing.** Design has a toolbar button that toggles
-      the queue and shows a badge with the active transfer count. App only exposes the chevron in the queue
-      divider; there is no toolbar entry point and no badge anywhere.
-- [ ] Cosmetic: design uses colored rounded direction badges (blue = down, orange = paused, red = failed);
-      app uses a plain SF Symbol arrow. Queue also defaults collapsed in the design vs. expanded in the app
-      (`isTransferQueueExpanded = true` in `MainView`).
+- [x] **Pause / Resume per transfer is entirely missing.** `TransferStatus` now has a `.paused` case and
+      `TransferRow` renders a per-row play/pause control (`TransferQueueViewModel.togglePause`). This is a
+      **UI-only stub**: toggling status doesn't actually interrupt/resume the underlying SFTP download
+      stream yet — that's real protocol work left for a follow-up session (see `SFTPClient.downloadToFile`).
+- [x] **Live progress never updates.** `FileBrowserViewModel.downloadFile` wires
+      `SFTPClient.downloadToFile(..., progress:)` through `FTPClient.downloadFile` /
+      `FTPClientProtocol` into the `TransferItem`; progress bar and status now update correctly.
+- [x] **Transfer speed is not shown.** `TransferItem.bytesPerSecond` / `formattedSpeed` feed `TransferRow`.
+- [x] **Queue summary text missing.** `TransferQueueViewModel.summaryText` ("N active · N completed") is
+      now shown next to the "Transfers" title.
+- [x] **Toolbar "Transfers" toggle + active-count badge missing.** `MainView` now has a toolbar button that
+      toggles the queue and shows a badge with the active transfer count.
+- [x] Cosmetic: `TransferRow` now uses colored rounded direction badges (blue = downloading, orange =
+      paused, red = failed) instead of a plain SF Symbol arrow. Queue now defaults collapsed
+      (`isTransferQueueExpanded = false` in `MainView`), matching the design.
 
 ### B. Remote-mutation UI that is out of scope and not in the design (remove)
 

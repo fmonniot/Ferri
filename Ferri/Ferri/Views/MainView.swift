@@ -8,7 +8,7 @@ struct MainView: View {
     
     @State private var showingConnectionSheet = false
     @State private var editingConnection: FTPServer?
-    @State private var isTransferQueueExpanded = true
+    @State private var isTransferQueueExpanded = false
     @State private var isConnected = false
     
     @State private var showingError = false
@@ -33,6 +33,29 @@ struct MainView: View {
                     viewModel: transferQueueViewModel,
                     isExpanded: $isTransferQueueExpanded
                 )
+            }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: {
+                        withAnimation {
+                            isTransferQueueExpanded.toggle()
+                        }
+                    }) {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "arrow.up.arrow.down.circle")
+                            if transferQueueViewModel.activeTransfers.count > 0 {
+                                Text("\(transferQueueViewModel.activeTransfers.count)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(3)
+                                    .frame(minWidth: 15, minHeight: 15)
+                                    .background(Circle().fill(Color.accentColor))
+                                    .offset(x: 8, y: -8)
+                            }
+                        }
+                    }
+                    .help("Transfers")
+                }
             }
         }
         .navigationSplitViewStyle(.balanced)

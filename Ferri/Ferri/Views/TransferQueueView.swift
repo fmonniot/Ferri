@@ -11,7 +11,11 @@ struct TransferQueueView: View {
             HStack {
                 Text("Transfers")
                     .font(.headline)
-                
+
+                Text(viewModel.summaryText)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
                 Spacer()
                 
                 if !viewModel.completedTransfers.isEmpty {
@@ -69,6 +73,8 @@ struct TransferQueueView: View {
                     viewModel.removeTransfer(id: transfer.id)
                 } onRetry: {
                     viewModel.retryTransfer(id: transfer.id)
+                } onTogglePause: {
+                    viewModel.togglePause(id: transfer.id)
                 }
             }
         }
@@ -80,25 +86,44 @@ struct TransferRow: View {
     let transfer: TransferItem
     let onRemove: () -> Void
     let onRetry: () -> Void
-    
+    let onTogglePause: () -> Void
+
+    private var badgeColor: Color {
+        switch transfer.status {
+        case .failed: .red
+        case .paused: .orange
+        default: .accentColor
+        }
+    }
+
+    private var canPause: Bool {
+        transfer.status == .inProgress || transfer.status == .paused || transfer.status == .queued
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: transfer.directionIcon)
-                .foregroundColor(transfer.direction == .upload ? .blue : .green)
-                .frame(width: 20)
-            
+                .foregroundColor(badgeColor)
+                .frame(width: 22, height: 22)
+                .background(badgeColor.opacity(0.14))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(transfer.fileName)
                     .font(.system(size: 13))
                     .lineLimit(1)
-                
-                if transfer.status == .inProgress {
+
+                if transfer.status == .inProgress || transfer.status == .paused {
                     ProgressView(value: transfer.progress)
                         .progressViewStyle(.linear)
+                        .tint(badgeColor)
 
                     HStack(spacing: 4) {
                         Text(transfer.formattedProgress)
-                        if let speed = transfer.formattedSpeed {
+                        if transfer.status == .paused {
+                            Text("· Paused")
+                                .foregroundColor(.orange)
+                        } else if let speed = transfer.formattedSpeed {
                             Text("·")
                             Text(speed)
                         }
@@ -120,9 +145,17 @@ struct TransferRow: View {
                         .foregroundColor(.orange)
                 }
             }
-            
+
             Spacer()
-            
+
+            if canPause {
+                Button(action: onTogglePause) {
+                    Image(systemName: transfer.status == .paused ? "play.fill" : "pause.fill")
+                }
+                .buttonStyle(.borderless)
+                .help(transfer.status == .paused ? "Resume" : "Pause")
+            }
+
             if transfer.status == .failed {
                 Button(action: onRetry) {
                     Image(systemName: "arrow.clockwise")
@@ -130,7 +163,7 @@ struct TransferRow: View {
                 .buttonStyle(.borderless)
                 .help("Retry")
             }
-            
+
             Button(action: onRemove) {
                 Image(systemName: "xmark")
                     .foregroundColor(.secondary)

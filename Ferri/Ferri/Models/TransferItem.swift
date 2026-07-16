@@ -8,6 +8,7 @@ enum TransferDirection: String, Codable {
 enum TransferStatus: String, Codable {
     case queued
     case inProgress
+    case paused
     case completed
     case failed
     case cancelled

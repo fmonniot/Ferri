@@ -7,11 +7,19 @@ final class TransferQueueViewModel: ObservableObject {
     @Published var showCompleted = true
     
     var activeTransfers: [TransferItem] {
-        transfers.filter { $0.status == .inProgress || $0.status == .queued }
+        transfers.filter { $0.status == .inProgress || $0.status == .queued || $0.status == .paused }
     }
-    
+
     var completedTransfers: [TransferItem] {
         transfers.filter { $0.status == .completed || $0.status == .failed || $0.status == .cancelled }
+    }
+
+    var completedCount: Int {
+        transfers.filter { $0.status == .completed }.count
+    }
+
+    var summaryText: String {
+        "\(activeTransfers.count) active · \(completedCount) completed"
     }
     
     func addTransfer(_ item: TransferItem) {
@@ -58,9 +66,24 @@ final class TransferQueueViewModel: ObservableObject {
               transfers[index].status == .failed || transfers[index].status == .cancelled else {
             return
         }
-        
+
         transfers[index].status = .queued
         transfers[index].bytesTransferred = 0
         transfers[index].errorMessage = nil
+    }
+
+    // TODO: stubbed for now — flips display state only. Actual SFTP stream
+    // interruption/resume will be wired into the download path in a later session.
+    func togglePause(id: UUID) {
+        guard let index = transfers.firstIndex(where: { $0.id == id }) else { return }
+
+        switch transfers[index].status {
+        case .inProgress, .queued:
+            transfers[index].status = .paused
+        case .paused:
+            transfers[index].status = .inProgress
+        default:
+            break
+        }
     }
 }
