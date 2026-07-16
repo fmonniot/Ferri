@@ -25,6 +25,10 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
     var remoteFile: RemoteFile?
     var ftpClient: any FTPClientProtocol = FTPClient.shared
 
+    /// The queue that owns and displays the downloads this drag kicks off. Without it the
+    /// promise still downloads, just untracked — so it stays optional for previews.
+    weak var transferQueue: TransferQueueViewModel?
+
     private lazy var filePromiseQueue: OperationQueue = {
         let queue = OperationQueue()
         queue.name = "com.ferri.file-promise"
@@ -38,14 +42,18 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
     /// mouseDown/mouseDragged/mouseUp directly. Overriding those methods meant every click
     /// on this overlay had to be manually re-forwarded to the table underneath for selection
     /// and double-click to keep working, which desynced from AppKit's own click/double-click
-    /// tracking (duplicate/extended selection) and starved mouseDragged of events once the
-    /// table's own tracking loop took over. `delaysPrimaryMouseButtonEvents = false` lets
-    /// clicks reach the table natively; this recognizer only intercepts once an actual pan
-    /// gesture is recognized.
+    /// tracking (duplicate/extended selection).
+    ///
+    /// `delaysPrimaryMouseButtonEvents` is left at its default (`true`): the recognizer must
+    /// get first look at mouseDown/mouseDragged so it can decide whether this is a pan *before*
+    /// the table's own mouseDown starts its blocking selection-tracking loop - once that loop
+    /// starts it pulls subsequent events straight off the event queue itself, so a recognizer
+    /// that let events through immediately (`false`) would never see enough of the drag to
+    /// recognize it. If the recognizer fails to recognize a pan (a plain click), AppKit replays
+    /// the buffered mouseDown/mouseUp to the table so click/double-click still work natively.
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         let panRecognizer = NSPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
-        panRecognizer.delaysPrimaryMouseButtonEvents = false
         addGestureRecognizer(panRecognizer)
     }
 
@@ -62,6 +70,12 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
 
         let fileType = file.isDirectory ? UTType.folder.identifier : UTType.data.identifier
         logger.info("Starting drag for \(file.isDirectory ? "directory" : "file"): \(file.path)")
+
+        #if DEBUG
+        if UITestSupport.isActive {
+            NotificationCenter.default.post(name: .uiTestDragSessionStarted, object: nil, userInfo: ["file": file.name])
+        }
+        #endif
 
         let provider = NSFilePromiseProvider(fileType: fileType, delegate: self)
         provider.userInfo = FilePromiseInfo(remoteFile: file)
@@ -103,7 +117,7 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
                 if file.isDirectory {
                     try await downloadDirectoryRecursively(remotePath: file.path, to: url)
                 } else {
-                    try await ftpClient.downloadFile(named: file.path, to: url)
+                    try await download(file, to: url)
                 }
                 logger.info("Promise fulfilled successfully: \(file.name)")
                 completionHandler(nil)
@@ -112,6 +126,19 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
                 completionHandler(error)
             }
         }
+    }
+
+    // MARK: - Download
+
+    /// Downloads one file as a row in the transfer queue, so a drag to Finder shows the same
+    /// progress, speed and pause/cancel controls as a download started from the app's own UI.
+    /// Falls back to an untracked download when no queue is attached.
+    private func download(_ file: RemoteFile, to localURL: URL) async throws {
+        guard let transferQueue else {
+            try await ftpClient.downloadFile(named: file.path, to: localURL)
+            return
+        }
+        try await transferQueue.downloadAndWait(file: file, to: localURL)
     }
 
     // MARK: - Recursive directory download
@@ -131,7 +158,9 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
                 try await downloadDirectoryRecursively(remotePath: entry.path, to: childURL)
             } else {
                 logger.debug("Downloading file: \(entry.path) -> \(childURL.path)")
-                try await ftpClient.downloadFile(named: entry.path, to: childURL)
+                // One queue row per file rather than one for the whole tree: the transfer
+                // rows are sized and driven per file, and a listing gives no total up front.
+                try await download(entry, to: childURL)
                 logger.debug("Downloaded: \(entry.name)")
             }
         }
@@ -155,17 +184,20 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
 
 struct FilePromiseDragSource: NSViewRepresentable {
     let file: RemoteFile
+    var transferQueue: TransferQueueViewModel?
     var ftpClient: any FTPClientProtocol = FTPClient.shared
 
     func makeNSView(context: Context) -> FilePromiseDragSourceView {
         let view = FilePromiseDragSourceView()
         view.remoteFile = file
         view.ftpClient = ftpClient
+        view.transferQueue = transferQueue
         return view
     }
 
     func updateNSView(_ nsView: FilePromiseDragSourceView, context: Context) {
         nsView.remoteFile = file
         nsView.ftpClient = ftpClient
+        nsView.transferQueue = transferQueue
     }
 }

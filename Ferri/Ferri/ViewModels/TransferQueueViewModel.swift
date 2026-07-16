@@ -17,6 +17,10 @@ final class TransferQueueViewModel: ObservableObject {
     private var tasks: [UUID: Task<Void, Never>] = [:]
     private var stopReasons: [UUID: StopReason] = [:]
 
+    /// Callers of `downloadAndWait(file:to:)` parked until their transfer reaches a terminal
+    /// state. A pause isn't terminal, so a paused-then-resumed transfer keeps them waiting.
+    private var completionWaiters: [UUID: [CheckedContinuation<Void, Error>]] = [:]
+
     init(ftpClient: any FTPClientProtocol = FTPClient.shared) {
         self.ftpClient = ftpClient
     }
@@ -70,6 +74,7 @@ final class TransferQueueViewModel: ObservableObject {
         tasks[id] = nil
         stopReasons[id] = nil
         transfers.removeAll { $0.id == id }
+        resumeWaiters(id: id, with: CancellationError())
     }
 
     func clearCompleted() {
@@ -83,6 +88,7 @@ final class TransferQueueViewModel: ObservableObject {
             stopReasons[item.id] = .cancel
             tasks[item.id]?.cancel()
             transfers[index].status = .cancelled
+            resumeWaiters(id: item.id, with: CancellationError())
         }
     }
 
@@ -107,7 +113,8 @@ final class TransferQueueViewModel: ObservableObject {
     // MARK: - Download orchestration
 
     /// Starts downloading `file` to `localURL`, enqueuing a transfer row and driving progress.
-    func startDownload(file: RemoteFile, to localURL: URL) {
+    @discardableResult
+    func startDownload(file: RemoteFile, to localURL: URL) -> UUID {
         let item = TransferItem(
             fileName: file.name,
             localPath: localURL.path,
@@ -118,6 +125,20 @@ final class TransferQueueViewModel: ObservableObject {
         )
         addTransfer(item)
         runDownload(id: item.id, resumeOffset: 0)
+        return item.id
+    }
+
+    /// Downloads `file` as a tracked transfer row and waits for it to finish, throwing if it
+    /// ends anywhere other than `.completed`.
+    ///
+    /// This is the entry point for AppKit file promises (drag to Finder): the promise's
+    /// completion handler has to report an outcome back to Finder, but the transfer still
+    /// belongs in the queue, so the queue owns the download task and the caller just waits.
+    func downloadAndWait(file: RemoteFile, to localURL: URL) async throws {
+        let id = startDownload(file: file, to: localURL)
+        try await withCheckedThrowingContinuation { continuation in
+            completionWaiters[id, default: []].append(continuation)
+        }
     }
 
     /// Pause an in-flight download, or resume a paused one from where it stopped.
@@ -173,20 +194,42 @@ final class TransferQueueViewModel: ObservableObject {
                         self.updateTransfer(id: id, bytesTransferred: bytesTransferred, bytesPerSecond: speed)
                     }
                 }
-                self.finishDownload(id: id, status: .completed, errorMessage: nil)
+                self.finishDownload(id: id, status: .completed, error: nil)
             } catch is CancellationError {
                 let status: TransferStatus = (self.stopReasons[id] == .pause) ? .paused : .cancelled
-                self.finishDownload(id: id, status: status, errorMessage: nil)
+                self.finishDownload(id: id, status: status, error: CancellationError())
             } catch {
-                self.finishDownload(id: id, status: .failed, errorMessage: error.localizedDescription)
+                self.finishDownload(id: id, status: .failed, error: error)
             }
         }
     }
 
-    private func finishDownload(id: UUID, status: TransferStatus, errorMessage: String?) {
+    private func finishDownload(id: UUID, status: TransferStatus, error: Error?) {
         tasks[id] = nil
         stopReasons[id] = nil
         // No-ops if the row was already removed.
-        updateTransfer(id: id, status: status, errorMessage: errorMessage)
+        updateTransfer(id: id, status: status, errorMessage: (status == .failed) ? error?.localizedDescription : nil)
+
+        switch status {
+        case .completed:
+            resumeWaiters(id: id, with: nil)
+        case .failed, .cancelled:
+            resumeWaiters(id: id, with: error ?? CancellationError())
+        case .paused, .queued, .inProgress:
+            // Not terminal — a resume can still carry this transfer to completion.
+            break
+        }
+    }
+
+    /// Hands the outcome to anyone parked in `downloadAndWait(file:to:)` for this transfer.
+    private func resumeWaiters(id: UUID, with error: Error?) {
+        guard let waiters = completionWaiters.removeValue(forKey: id) else { return }
+        for waiter in waiters {
+            if let error {
+                waiter.resume(throwing: error)
+            } else {
+                waiter.resume()
+            }
+        }
     }
 }

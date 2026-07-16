@@ -24,14 +24,24 @@ import XCTest
 /// so rows can be found and selection state read reliably regardless of display text.
 final class FerriUITests: XCTestCase {
 
+    private var launchedApp: XCUIApplication?
+
     override func setUpWithError() throws {
         continueAfterFailure = false
+    }
+
+    override func tearDownWithError() throws {
+        // Each test launches its own app instance; leaving it running lets its window
+        // occlude the next test's freshly-launched window ("Unable to find hit point").
+        launchedApp?.terminate()
+        launchedApp = nil
     }
 
     private func launchApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-UITestMode"]
         app.launch()
+        launchedApp = app
         return app
     }
 
@@ -124,6 +134,36 @@ final class FerriUITests: XCTestCase {
 
         forwardButton.click()
         XCTAssertTrue(app.staticTexts["file.notes.txt"].waitForExistence(timeout: 5), "Forward should re-enter Documents")
+    }
+
+    /// Regression test for the drag-source overlay's `NSPanGestureRecognizer`: it must get
+    /// first look at mouse events (`delaysPrimaryMouseButtonEvents` at its default `true`) so
+    /// it can recognize a real drag before the table's own click-tracking loop consumes the
+    /// events. `FilePromiseDragSourceView.handlePan` posts `.uiTestDragSessionStarted` right
+    /// before `beginDraggingSession`, which `MainView` surfaces (behind `-UITestMode`) as the
+    /// hidden `debug.lastDragStartedFile` text - a real Finder drop isn't drivable from
+    /// XCUITest, but reaching that call is exactly the step that silently broke, so it's what
+    /// this test guards.
+    @MainActor
+    func testDraggingARowStartsAFilePromiseDrag() throws {
+        let app = launchApp()
+
+        let readme = app.staticTexts["file.readme.txt"]
+        XCTAssertTrue(readme.waitForExistence(timeout: 5))
+
+        let dragStatus = app.staticTexts["debug.lastDragStartedFile"]
+        XCTAssertTrue(dragStatus.waitForExistence(timeout: 5))
+        XCTAssertEqual(dragStatus.value as? String, "none")
+
+        let source = readme.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let target = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
+        source.click(forDuration: 0.2, thenDragTo: target)
+
+        let deadline = Date().addingTimeInterval(5)
+        while (dragStatus.value as? String) != "readme.txt" && Date() < deadline {
+            usleep(100_000)
+        }
+        XCTAssertEqual(dragStatus.value as? String, "readme.txt", "Dragging a row should reach beginDraggingSession")
     }
 
     @MainActor

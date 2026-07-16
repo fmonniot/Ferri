@@ -4,7 +4,7 @@ import FTPClient
 struct MainView: View {
     @StateObject private var connectionViewModel = ConnectionListViewModel()
     @StateObject private var fileBrowserViewModel: FileBrowserViewModel
-    @StateObject private var transferQueueViewModel = TransferQueueViewModel()
+    @StateObject private var transferQueueViewModel: TransferQueueViewModel
 
     @State private var showingConnectionSheet = false
     @State private var editingConnection: FTPServer?
@@ -14,19 +14,26 @@ struct MainView: View {
     init() {
         #if DEBUG
         if UITestSupport.isActive {
-            _fileBrowserViewModel = StateObject(wrappedValue: FileBrowserViewModel(ftpClient: UITestMockFTPClient()))
-        } else {
-            _fileBrowserViewModel = StateObject(wrappedValue: FileBrowserViewModel())
+            // One mock shared by both view models, so a drag-started download resolves against
+            // the same fake tree the browser is listing.
+            let mock = UITestMockFTPClient()
+            _fileBrowserViewModel = StateObject(wrappedValue: FileBrowserViewModel(ftpClient: mock))
+            _transferQueueViewModel = StateObject(wrappedValue: TransferQueueViewModel(ftpClient: mock))
+            return
         }
-        #else
-        _fileBrowserViewModel = StateObject(wrappedValue: FileBrowserViewModel())
         #endif
+        _fileBrowserViewModel = StateObject(wrappedValue: FileBrowserViewModel())
+        _transferQueueViewModel = StateObject(wrappedValue: TransferQueueViewModel())
     }
 
     @State private var showingError = false
     @State private var errorMessage = ""
     @State private var failedServer: FTPServer?
     @State private var connectingServer: FTPServer?
+
+    #if DEBUG
+    @State private var uiTestLastDragStartedFile = "none"
+    #endif
 
     var body: some View {
         NavigationSplitView {
@@ -50,6 +57,21 @@ struct MainView: View {
                     if let connectingServer {
                         connectingOverlay(host: connectingServer.displayName)
                     }
+
+                    #if DEBUG
+                    if UITestSupport.isActive {
+                        // Surfaces FilePromiseDragSourceView's drag-start notification as an
+                        // accessibility-readable text so FerriUITests can assert a drag gesture
+                        // reached beginDraggingSession without driving a real Finder drop.
+                        Text(uiTestLastDragStartedFile)
+                            .accessibilityIdentifier("debug.lastDragStartedFile")
+                            .opacity(0.01)
+                            .allowsHitTesting(false)
+                            .onReceive(NotificationCenter.default.publisher(for: .uiTestDragSessionStarted)) { notification in
+                                uiTestLastDragStartedFile = notification.userInfo?["file"] as? String ?? "unknown"
+                            }
+                    }
+                    #endif
                 }
                 .frame(minHeight: 200, maxHeight: .infinity)
 

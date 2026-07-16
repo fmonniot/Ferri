@@ -13,6 +13,16 @@ enum UITestSupport {
     }
 }
 
+/// Posted by `FilePromiseDragSourceView.handlePan` when it actually reaches
+/// `beginDraggingSession` (see `handlePan`). A UI test can't drive a real Finder drop, but
+/// recognizing-and-starting the drag is exactly the step that has regressed twice now, so
+/// `MainView` surfaces it (behind `-UITestMode`) as a hidden, accessibility-identified `Text`
+/// that `FerriUITests` reads - cross-process file/temp-dir marker reads proved unreliable
+/// under the XCUITest runner, so this stays in-process instead.
+extension Notification.Name {
+    static let uiTestDragSessionStarted = Notification.Name("uiTestDragSessionStarted")
+}
+
 /// A fixed, in-memory directory tree standing in for a real SFTP server during UI tests.
 final class UITestMockFTPClient: FTPClientProtocol, @unchecked Sendable {
     private(set) var isConnected = true

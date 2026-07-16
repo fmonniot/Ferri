@@ -227,7 +227,7 @@ struct FileBrowserView: View {
                     }
                 }
                 .overlay {
-                    FilePromiseDragSource(file: file)
+                    FilePromiseDragSource(file: file, transferQueue: transferQueue)
                 }
             }
             .width(min: 200, ideal: 300)
