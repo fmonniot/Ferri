@@ -1,13 +1,19 @@
-Manual written known issue:
+# TODO
 
-- Understand naming convention about actor usage (e.g. Merge FTPClient with FtpClientActor, remove the suffix, etc…
-- Have a timeout when receiving data on data channels
-- Still doesn't really work with folders, can wait.
-- No transfer entry in the transfer pane
-- To test once the download speed has been improved: Finder completion status icon
-- Create tests for the Ferri app (trying to understand how to make that work with no access to docker CLI in tests [App Sandbox])
-- Use VSplitView instead of VStack for the transfer/file browser division
-- Clicking the refresh button move us back to the root folder
-- Double click on a folder doesn't open it
-- No "selection" of file (e.g. click on file doesn't change its background to blue/text to white)
-- Make sure we have a test for download integrity (e.g. file on server has same hash as file downloaded)
+Open issues, written to be actionable by a future session without extra context-gathering. This is now the single source of tasks for the repo — the old `FTPClient/TODO.md` audit doc has been folded in below and removed; anything marked resolved there was dropped, same as the app-side items resolved since the last pass (data-channel timeout, folder download, transfer-pane wiring, VSplitView layout, refresh-preserves-path, double-click-to-open, file selection highlight). See git history for the old wording if needed.
+
+## FTPClient package
+
+- **Resolve the actor/NIO-event-loop concurrency model split.** `SFTPClient` mixes `actor` isolation, NIO's event-loop threading (`SFTPChannelHandler`), and (historically) `NSLock` for `pendingRequests` — three models with an unsound interaction. Fix: drop any lock, keep `pendingRequests` purely actor-isolated, and hop from NIO callbacks via `Task { await client.handleResponse(...) }` (already the pattern in `channelRead`). Do this together with the two related issues below, since all three are the same root cause (no single owner for cross-domain state):
+  - `SFTPProtocol` (`FTPClient/Sources/FTPClient/SFTPProtocol.swift`) is a `final class` with mutable `nextRequestId: UInt32`, shared between actor-isolated code and NIO-thread code with no synchronization. Fix: make it an actor, fold `nextRequestId` into `SFTPClient`'s actor state, or use an atomic integer.
+  - `SFTPProtocol.encodeRequest` dispatches on request type via `is/as` casts instead of the type system — an unhandled new request type silently falls through to a runtime `SFTPError.encodingFailed` instead of a compile error. Fix: add `func encode(into buffer: inout ByteBuffer) throws` to the `SFTPRequest` protocol so each request struct self-encodes; `encodeRequest` becomes a thin wrapper that prepends the length frame.
+  - This also closes out the old "understand actor naming convention" note — there's no `FtpClientActor` in the codebase anymore, the real issue was always this mixed concurrency model, not naming.
+- **Add a download-integrity test.** No test currently verifies a downloaded file's contents match the source. Add an integration test (in `FTPClient/Tests/FTPClientTests/FTPClientTests.swift`, alongside the existing `@Suite(.serialized)` Docker-backed tests) that seeds a file of known content on the test SFTP server, downloads it via `downloadToFile`, and compares a SHA-256 hash (or byte-for-byte) against the source. Adds a variant of that test for the pause/resume feature.
+- **Implement concurrent chunk transfers.** Downloads currently send one `SSH_FXP_READ` and await the response before the next; SFTP allows multiple in-flight requests, and pipelining 4-8 reads concurrently (`withThrowingTaskGroup`, bounded concurrency) could improve throughput 5-10x on high-latency links. Lower priority than the two items above.
+- **Revisit `SFTPClient.isConnectedFlag`'s `nonisolated(unsafe)` read.** It was previously made properly synchronized but reverted because the test suite needed the synchronous unsafe read — see git history around `SFTPClient.swift` for that revert. Reads of `isConnected` from outside the actor aren't ordering-guaranteed against actor-isolated writes. Revisit with either an atomic (`swift-atomics`) or by making the tests tolerate an `async` `isConnected` property, rather than leaving the unsafe read in place indefinitely.
+- **Use a stronger type than `String` for remote paths** (low priority). Plain `String` throughout lets invalid/empty paths pass silently. A lightweight `SFTPPath` wrapper, or at minimum validation in `resolvePath`, would catch malformed input earlier.
+
+## Ferri app
+
+- **Wire the Finder file-promise completion status icon.** `FilePromiseDragSourceView` (`Ferri/Ferri/Views/FilePromiseDragSource.swift`) fulfills promises but doesn't report incremental progress back to `NSFilePromiseProvider`/Finder, so Finder's progress/completion badge on the destination file never updates during a drag-drop download. Best tested against a large remote file, since small test files finish before the badge would visibly update.
+- **Expand Ferri app test coverage.** `Ferri/FerriTests/FerriTests.swift` already has 36 mock-based tests (`MockFTPClient`, no Docker/network needed — works fine under App Sandbox, contrary to the old note here). Audit for gaps: `FilePromiseDragSourceView`'s drag/download logic and `TransferQueueViewModel`'s pause/resume/cancel paths look under-tested relative to the other ViewModels.

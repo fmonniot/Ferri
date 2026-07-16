@@ -63,7 +63,7 @@ xcodebuild -workspace Ferri.xcworkspace -scheme Ferri test
 - `SFTPProtocol.swift` — SFTP wire-format encoding/decoding (request/response types, `SFTPFileAttributes`) independent of NIO channel plumbing.
 - `RemoteFile.swift` / `FTPServer.swift` — plain value-type models (remote directory entry; saved server connection incl. credentials).
 
-`FTPClient/TODO.md` is a detailed, mostly-resolved bug/architecture audit of this package (packet framing, handshake, auth, concurrency model, etc.) with a status table at the bottom — check it before touching `SFTPClient.swift`/`SFTPProtocol.swift` to see what's already fixed vs. still open (e.g. the mixed actor/NIO-event-loop concurrency model and `is/as` request-type dispatch are flagged as unresolved architecture issues, not just style nits).
+Known open issues for this package (mixed actor/NIO-event-loop concurrency model, `is/as` request-type dispatch, etc.) live in the top-level `TODO.md`, not a separate file — check it before touching `SFTPClient.swift`/`SFTPProtocol.swift`.
 
 ### Ferri app (MVVM)
 
