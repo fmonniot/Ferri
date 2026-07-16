@@ -39,6 +39,9 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
 
     override func mouseDown(with event: NSEvent) {
         dragOrigin = convert(event.locationInWindow, from: nil)
+        // Forward the click so table selection/double-click still works
+        super.mouseDown(with: event)
+        nextResponder?.mouseDown(with: event)
     }
 
     override func mouseDragged(with event: NSEvent) {
