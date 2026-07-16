@@ -52,6 +52,46 @@ final class FileBrowserViewModel: ObservableObject {
     }
     
     func loadDirectory(at path: String = "") async {
+        await performLoad(at: path)
+        addToHistory(currentPath)
+    }
+
+    func refresh() async {
+        await loadDirectory(at: currentPath)
+    }
+
+    func navigateToFolder(_ folder: RemoteFile) async {
+        guard folder.isDirectory else { return }
+        await loadDirectory(at: folder.path)
+    }
+
+    func goUp() async {
+        guard canGoUp else { return }
+        await loadDirectory(at: "..")
+    }
+
+    /// Moves within the existing `pathHistory` stack rather than pushing a new entry -
+    /// unlike `loadDirectory`, this must not call `addToHistory` or it would truncate
+    /// the forward/back entries it's supposed to be navigating through.
+    func goBack() {
+        guard canGoBack else { return }
+        historyIndex -= 1
+        let path = pathHistory[historyIndex]
+        Task {
+            await performLoad(at: path)
+        }
+    }
+
+    func goForward() {
+        guard canGoForward else { return }
+        historyIndex += 1
+        let path = pathHistory[historyIndex]
+        Task {
+            await performLoad(at: path)
+        }
+    }
+
+    private func performLoad(at path: String) async {
         isLoading = true
         errorMessage = nil
         isPermissionDenied = false
@@ -60,8 +100,6 @@ final class FileBrowserViewModel: ObservableObject {
             let result = try await ftpClient.listDirectory(at: path)
             files = sortFiles(result)
             currentPath = ftpClient.currentPath
-
-            addToHistory(currentPath)
         } catch {
             // SFTP status code 3 is SSH_FX_PERMISSION_DENIED (SFTPv3 spec).
             if case SFTPClientError.requestFailed(let code, _) = error, code == 3 {
@@ -72,38 +110,6 @@ final class FileBrowserViewModel: ObservableObject {
         }
 
         isLoading = false
-    }
-    
-    func refresh() async {
-        await loadDirectory(at: currentPath)
-    }
-    
-    func navigateToFolder(_ folder: RemoteFile) async {
-        guard folder.isDirectory else { return }
-        await loadDirectory(at: folder.path)
-    }
-    
-    func goUp() async {
-        guard canGoUp else { return }
-        await loadDirectory(at: "..")
-    }
-    
-    func goBack() {
-        guard canGoBack else { return }
-        historyIndex -= 1
-        let path = pathHistory[historyIndex]
-        Task {
-            await loadDirectory(at: path)
-        }
-    }
-    
-    func goForward() {
-        guard canGoForward else { return }
-        historyIndex += 1
-        let path = pathHistory[historyIndex]
-        Task {
-            await loadDirectory(at: path)
-        }
     }
     
     func sortBy(_ column: SortColumn) {

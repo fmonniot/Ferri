@@ -3,13 +3,25 @@ import FTPClient
 
 struct MainView: View {
     @StateObject private var connectionViewModel = ConnectionListViewModel()
-    @StateObject private var fileBrowserViewModel = FileBrowserViewModel()
+    @StateObject private var fileBrowserViewModel: FileBrowserViewModel
     @StateObject private var transferQueueViewModel = TransferQueueViewModel()
-    
+
     @State private var showingConnectionSheet = false
     @State private var editingConnection: FTPServer?
     @State private var isTransferQueueExpanded = false
     @State private var isConnected = false
+
+    init() {
+        #if DEBUG
+        if UITestSupport.isActive {
+            _fileBrowserViewModel = StateObject(wrappedValue: FileBrowserViewModel(ftpClient: UITestMockFTPClient()))
+        } else {
+            _fileBrowserViewModel = StateObject(wrappedValue: FileBrowserViewModel())
+        }
+        #else
+        _fileBrowserViewModel = StateObject(wrappedValue: FileBrowserViewModel())
+        #endif
+    }
 
     @State private var showingError = false
     @State private var errorMessage = ""
@@ -95,6 +107,13 @@ struct MainView: View {
         }
         .onAppear {
             fileBrowserViewModel.setConnectionViewModel(connectionViewModel)
+            #if DEBUG
+            if UITestSupport.isActive {
+                isConnected = true
+                Task { await fileBrowserViewModel.loadDirectory() }
+                return
+            }
+            #endif
             if let server = connectionViewModel.connections.first(where: { $0.autoConnect }) {
                 connectionViewModel.selectConnection(server)
                 connect(to: server)

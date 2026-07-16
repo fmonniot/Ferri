@@ -61,6 +61,7 @@ public final class FTPClient: FTPClientProtocol, @unchecked Sendable {
 
         logger.debug("Calling client.listDirectory...")
         let files = try await client.listDirectory(path: path)
+        currentPath = await client.currentDirectory()
         logger.debug("Got \(files.count) files")
         return files
     }

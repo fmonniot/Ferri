@@ -39,16 +39,19 @@ struct FileBrowserView: View {
                     Image(systemName: "chevron.left")
                 }
                 .disabled(!viewModel.canGoBack)
+                .accessibilityIdentifier("nav.back")
 
                 Button(action: { viewModel.goForward() }) {
                     Image(systemName: "chevron.right")
                 }
                 .disabled(!viewModel.canGoForward)
+                .accessibilityIdentifier("nav.forward")
 
                 Button(action: { Task { await viewModel.goUp() } }) {
                     Image(systemName: "arrow.up")
                 }
                 .disabled(!viewModel.canGoUp)
+                .accessibilityIdentifier("nav.up")
 
                 Button(action: { Task { await viewModel.refresh() } }) {
                     Image(systemName: "arrow.clockwise")
@@ -220,6 +223,7 @@ struct FileBrowserView: View {
                     HStack(spacing: 8) {
                         fileIcon(for: file)
                         Text(file.name)
+                            .accessibilityIdentifier("file.\(file.name)")
                     }
                 }
                 .overlay {

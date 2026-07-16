@@ -25,9 +25,6 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
     var remoteFile: RemoteFile?
     var ftpClient: any FTPClientProtocol = FTPClient.shared
 
-    private var dragOrigin: NSPoint?
-    private static let dragThreshold: CGFloat = 3.0
-
     private lazy var filePromiseQueue: OperationQueue = {
         let queue = OperationQueue()
         queue.name = "com.ferri.file-promise"
@@ -35,30 +32,33 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         return queue
     }()
 
-    // MARK: - Mouse handling
+    // MARK: - Init
 
-    override func mouseDown(with event: NSEvent) {
-        dragOrigin = convert(event.locationInWindow, from: nil)
-        // Forward the click so table selection/double-click still works
-        super.mouseDown(with: event)
-        nextResponder?.mouseDown(with: event)
+    /// Drag-out is driven entirely by this gesture recognizer instead of overriding
+    /// mouseDown/mouseDragged/mouseUp directly. Overriding those methods meant every click
+    /// on this overlay had to be manually re-forwarded to the table underneath for selection
+    /// and double-click to keep working, which desynced from AppKit's own click/double-click
+    /// tracking (duplicate/extended selection) and starved mouseDragged of events once the
+    /// table's own tracking loop took over. `delaysPrimaryMouseButtonEvents = false` lets
+    /// clicks reach the table natively; this recognizer only intercepts once an actual pan
+    /// gesture is recognized.
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        let panRecognizer = NSPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        panRecognizer.delaysPrimaryMouseButtonEvents = false
+        addGestureRecognizer(panRecognizer)
     }
 
-    override func mouseDragged(with event: NSEvent) {
-        guard let origin = dragOrigin, let file = remoteFile else {
-            super.mouseDragged(with: event)
-            return
-        }
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
-        let current = convert(event.locationInWindow, from: nil)
-        let dx = current.x - origin.x
-        let dy = current.y - origin.y
-        let distance = sqrt(dx * dx + dy * dy)
+    // MARK: - Drag gesture
 
-        guard distance >= Self.dragThreshold else { return }
-
-        // Reset so we don't start multiple drags
-        dragOrigin = nil
+    @objc private func handlePan(_ recognizer: NSPanGestureRecognizer) {
+        guard recognizer.state == .began,
+              let file = remoteFile,
+              let event = NSApp.currentEvent else { return }
 
         let fileType = file.isDirectory ? UTType.folder.identifier : UTType.data.identifier
         logger.info("Starting drag for \(file.isDirectory ? "directory" : "file"): \(file.path)")
@@ -70,13 +70,6 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         draggingItem.setDraggingFrame(bounds, contents: dragPreviewImage(for: file))
 
         beginDraggingSession(with: [draggingItem], event: event, source: self)
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        dragOrigin = nil
-        // Forward the click so table selection still works
-        super.mouseUp(with: event)
-        nextResponder?.mouseUp(with: event)
     }
 
     // MARK: - NSDraggingSource
@@ -155,13 +148,6 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         }
         icon.size = NSSize(width: 32, height: 32)
         return icon
-    }
-
-    // MARK: - Hit testing
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        guard remoteFile != nil else { return nil }
-        return super.hitTest(point)
     }
 }
 

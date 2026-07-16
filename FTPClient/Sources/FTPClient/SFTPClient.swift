@@ -279,6 +279,8 @@ public actor SFTPClient {
 
         try? await closeHandle(handle)
 
+        currentPath = absolutePath
+
         return files.sorted { file1, file2 in
             if file1.isDirectory != file2.isDirectory {
                 return file1.isDirectory
