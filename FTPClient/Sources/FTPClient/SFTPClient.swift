@@ -54,10 +54,9 @@ public actor SFTPClient {
     // and written from actor-isolated methods without Swift 6 isolation errors.
     nonisolated(unsafe) private var isConnectedFlag = false
 
-    // nonisolated(unsafe) so the SFTPChannelHandler (a non-actor Sendable class) can hold a
-    // direct reference captured inside the channelInitializer closure without triggering actor
-    // isolation violations.
-    nonisolated(unsafe) var protocol_: SFTPProtocol = SFTPProtocol()
+    // SFTPProtocol is a pure encoder/decoder with no mutable state, so it's genuinely
+    // Sendable and can be handed to the non-actor SFTPChannelHandler without unsafe opt-outs.
+    let protocol_ = SFTPProtocol()
 
     private(set) var currentPath: String = "/"
 
@@ -66,6 +65,16 @@ public actor SFTPClient {
     var operationTimeout: TimeAmount = .seconds(30)
 
     private var timeoutTasks: [UInt32: Task<Void, Never>] = [:]
+
+    // Owned by the actor rather than SFTPProtocol so incrementing it is safe without a lock
+    // even though SFTPProtocol instances are shared across the actor/NIO-event-loop boundary.
+    private var nextRequestId: UInt32 = 1
+
+    private func nextId() -> UInt32 {
+        let id = nextRequestId
+        nextRequestId += 1
+        return id
+    }
 
     public init() {}
 
@@ -548,7 +557,7 @@ public actor SFTPClient {
 
     private func openFile(path: String, flags: UInt32, timeout: TimeAmount? = nil) async throws -> SFTPHandle {
         let request = SFTPOpenRequest(
-            id: protocol_.nextId(),
+            id: nextId(),
             path: path,
             pflags: flags,
             attrs: .empty
@@ -568,7 +577,7 @@ public actor SFTPClient {
 
     private func openDirectory(path: String, timeout: TimeAmount? = nil) async throws -> SFTPHandle {
         let request = SFTPOpendirRequest(
-            id: protocol_.nextId(),
+            id: nextId(),
             path: path
         )
 
@@ -586,7 +595,7 @@ public actor SFTPClient {
 
     private func closeHandle(_ handle: SFTPHandle, timeout: TimeAmount? = nil) async throws {
         let request = SFTPCloseRequest(
-            id: protocol_.nextId(),
+            id: nextId(),
             handle: handle
         )
         _ = try await sendRequestWithTimeout(request, timeout: timeout)
@@ -594,7 +603,7 @@ public actor SFTPClient {
 
     private func readFromHandle(handle: SFTPHandle, offset: UInt64, length: UInt32, timeout: TimeAmount? = nil) async throws -> ByteBuffer {
         let request = SFTPReadRequest(
-            id: protocol_.nextId(),
+            id: nextId(),
             handle: handle,
             offset: offset,
             length: length
@@ -617,7 +626,7 @@ public actor SFTPClient {
 
     private func writeToHandle(handle: SFTPHandle, offset: UInt64, data: ByteBuffer, timeout: TimeAmount? = nil) async throws {
         let request = SFTPWriteRequest(
-            id: protocol_.nextId(),
+            id: nextId(),
             handle: handle,
             offset: offset,
             data: data
@@ -632,7 +641,7 @@ public actor SFTPClient {
 
     private func readDirectory(handle: SFTPHandle, timeout: TimeAmount? = nil) async throws -> [SFTPDirectoryEntry] {
         let request = SFTPReaddirRequest(
-            id: protocol_.nextId(),
+            id: nextId(),
             handle: handle
         )
 
@@ -653,7 +662,7 @@ public actor SFTPClient {
 
     private func fstatHandle(_ handle: SFTPHandle, timeout: TimeAmount? = nil) async throws -> SFTPFileAttributes {
         let request = SFTPFstatRequest(
-            id: protocol_.nextId(),
+            id: nextId(),
             handle: handle
         )
 
@@ -671,7 +680,7 @@ public actor SFTPClient {
 
     private func stat(path: String, timeout: TimeAmount? = nil) async throws -> SFTPFileAttributes {
         let request = SFTPStatRequest(
-            id: protocol_.nextId(),
+            id: nextId(),
             path: path
         )
 

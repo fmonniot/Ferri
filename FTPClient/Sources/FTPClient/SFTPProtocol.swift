@@ -104,15 +104,62 @@ enum SFTPResponse: Sendable {
     case attrs(id: UInt32, attributes: SFTPFileAttributes)
 }
 
+func writeString(_ buffer: inout ByteBuffer, _ string: String) throws {
+    let data = string.utf8
+    guard data.count <= UInt32.max else {
+        throw SFTPError.encodingFailed("String too long")
+    }
+    buffer.writeInteger(UInt32(data.count), as: UInt32.self)
+    buffer.writeBytes(data)
+}
+
+func writeHandle(_ buffer: inout ByteBuffer, _ handle: SFTPHandle) {
+    buffer.writeInteger(UInt32(handle.bytes.readableBytes), as: UInt32.self)
+    buffer.writeBytes(handle.bytes.readableBytesView)
+}
+
+func encodeAttributes(_ buffer: inout ByteBuffer, attrs: SFTPFileAttributes) {
+    var flags: UInt32 = 0
+    if attrs.size != nil { flags |= 0x00000001 }
+    if attrs.permissions != nil { flags |= 0x00000004 }
+    if attrs.uid != nil || attrs.gid != nil { flags |= 0x00000002 }
+    if attrs.accessTime != nil || attrs.modifyTime != nil { flags |= 0x00000008 }
+
+    buffer.writeInteger(flags, as: UInt32.self)
+
+    if let size = attrs.size {
+        buffer.writeInteger(size, as: UInt64.self)
+    }
+    if let uid = attrs.uid, let gid = attrs.gid {
+        buffer.writeInteger(uid, as: UInt32.self)
+        buffer.writeInteger(gid, as: UInt32.self)
+    }
+    if let permissions = attrs.permissions {
+        buffer.writeInteger(permissions, as: UInt32.self)
+    }
+    if let atime = attrs.accessTime {
+        buffer.writeInteger(atime, as: UInt32.self)
+    }
+    if let mtime = attrs.modifyTime {
+        buffer.writeInteger(mtime, as: UInt32.self)
+    }
+}
+
 protocol SFTPRequest {
     var id: UInt32 { get }
     var type: SFTPMessageType { get }
+    func encode(into buffer: inout ByteBuffer) throws
 }
 
 struct SFTPInitRequest: SFTPRequest {
     let id: UInt32
     let version: UInt32 = 3
     let type: SFTPMessageType = .initVersion
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(version, as: UInt32.self)
+    }
 }
 
 struct SFTPOpenRequest: SFTPRequest {
@@ -121,12 +168,26 @@ struct SFTPOpenRequest: SFTPRequest {
     let pflags: UInt32
     let attrs: SFTPFileAttributes
     let type: SFTPMessageType = .open
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, path)
+        buffer.writeInteger(pflags, as: UInt32.self)
+        encodeAttributes(&buffer, attrs: attrs)
+    }
 }
 
 struct SFTPCloseRequest: SFTPRequest {
     let id: UInt32
     let handle: SFTPHandle
     let type: SFTPMessageType = .close
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        writeHandle(&buffer, handle)
+    }
 }
 
 struct SFTPReadRequest: SFTPRequest {
@@ -135,6 +196,14 @@ struct SFTPReadRequest: SFTPRequest {
     let offset: UInt64
     let length: UInt32
     let type: SFTPMessageType = .read
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        writeHandle(&buffer, handle)
+        buffer.writeInteger(offset, as: UInt64.self)
+        buffer.writeInteger(length, as: UInt32.self)
+    }
 }
 
 struct SFTPWriteRequest: SFTPRequest {
@@ -143,24 +212,52 @@ struct SFTPWriteRequest: SFTPRequest {
     let offset: UInt64
     let data: ByteBuffer
     let type: SFTPMessageType = .write
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        writeHandle(&buffer, handle)
+        buffer.writeInteger(offset, as: UInt64.self)
+        buffer.writeInteger(UInt32(data.readableBytes), as: UInt32.self)
+        var data = data
+        buffer.writeBuffer(&data)
+    }
 }
 
 struct SFTPLstatRequest: SFTPRequest {
     let id: UInt32
     let path: String
     let type: SFTPMessageType = .lstat
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, path)
+    }
 }
 
 struct SFTPStatRequest: SFTPRequest {
     let id: UInt32
     let path: String
     let type: SFTPMessageType = .stat
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, path)
+    }
 }
 
 struct SFTPFstatRequest: SFTPRequest {
     let id: UInt32
     let handle: SFTPHandle
     let type: SFTPMessageType = .fstat
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        writeHandle(&buffer, handle)
+    }
 }
 
 struct SFTPSetstatRequest: SFTPRequest {
@@ -168,6 +265,13 @@ struct SFTPSetstatRequest: SFTPRequest {
     let path: String
     let attrs: SFTPFileAttributes
     let type: SFTPMessageType = .setstat
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, path)
+        encodeAttributes(&buffer, attrs: attrs)
+    }
 }
 
 struct SFTPFsetstatRequest: SFTPRequest {
@@ -175,24 +279,49 @@ struct SFTPFsetstatRequest: SFTPRequest {
     let handle: SFTPHandle
     let attrs: SFTPFileAttributes
     let type: SFTPMessageType = .fsetstat
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        writeHandle(&buffer, handle)
+        encodeAttributes(&buffer, attrs: attrs)
+    }
 }
 
 struct SFTPOpendirRequest: SFTPRequest {
     let id: UInt32
     let path: String
     let type: SFTPMessageType = .opendir
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, path)
+    }
 }
 
 struct SFTPReaddirRequest: SFTPRequest {
     let id: UInt32
     let handle: SFTPHandle
     let type: SFTPMessageType = .readdir
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        writeHandle(&buffer, handle)
+    }
 }
 
 struct SFTPRemoveRequest: SFTPRequest {
     let id: UInt32
     let path: String
     let type: SFTPMessageType = .remove
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, path)
+    }
 }
 
 struct SFTPMkdirRequest: SFTPRequest {
@@ -200,18 +329,37 @@ struct SFTPMkdirRequest: SFTPRequest {
     let path: String
     let attrs: SFTPFileAttributes
     let type: SFTPMessageType = .mkdir
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, path)
+        encodeAttributes(&buffer, attrs: attrs)
+    }
 }
 
 struct SFTPRmdirRequest: SFTPRequest {
     let id: UInt32
     let path: String
     let type: SFTPMessageType = .rmdir
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, path)
+    }
 }
 
 struct SFTPRealpathRequest: SFTPRequest {
     let id: UInt32
     let path: String
     let type: SFTPMessageType = .realpath
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, path)
+    }
 }
 
 struct SFTPRenameRequest: SFTPRequest {
@@ -219,12 +367,25 @@ struct SFTPRenameRequest: SFTPRequest {
     let oldPath: String
     let newPath: String
     let type: SFTPMessageType = .rename
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, oldPath)
+        try writeString(&buffer, newPath)
+    }
 }
 
 struct SFTPReadlinkRequest: SFTPRequest {
     let id: UInt32
     let path: String
     let type: SFTPMessageType = .readlink
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, path)
+    }
 }
 
 struct SFTPSymlinkRequest: SFTPRequest {
@@ -232,135 +393,26 @@ struct SFTPSymlinkRequest: SFTPRequest {
     let linkPath: String
     let targetPath: String
     let type: SFTPMessageType = .symlink
+
+    func encode(into buffer: inout ByteBuffer) throws {
+        buffer.writeInteger(type.rawValue, as: UInt8.self)
+        buffer.writeInteger(id, as: UInt32.self)
+        try writeString(&buffer, targetPath)
+        try writeString(&buffer, linkPath)
+    }
 }
 
-final class SFTPProtocol: @unchecked Sendable {
-    private var nextRequestId: UInt32 = 1
-
-    func nextId() -> UInt32 {
-        let id = nextRequestId
-        nextRequestId += 1
-        return id
-    }
-
+/// Stateless SFTP wire-format encoder/decoder. Request IDs are owned by
+/// `SFTPClient`'s actor-isolated state, not by this type, so it has no
+/// mutable state and is safely `Sendable` across the actor / NIO-event-loop
+/// boundary without `@unchecked`.
+final class SFTPProtocol: Sendable {
     func encodeRequest(_ request: SFTPRequest) throws -> ByteBuffer {
         var payloadBuffer = ByteBufferAllocator().buffer(capacity: 256)
-        
+
         logger.debug("Encoding \(request.type) request id=\(request.id)")
-        
-        switch request {
-        case let req as SFTPInitRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.version, as: UInt32.self)
-            logger.debug("  version = \(req.version)")
 
-        case let req as SFTPOpendirRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.path)
-            logger.debug("  path = \(req.path)")
-
-        case let req as SFTPReaddirRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeHandle(&payloadBuffer, req.handle)
-
-        case let req as SFTPCloseRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeHandle(&payloadBuffer, req.handle)
-
-        case let req as SFTPOpenRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.path)
-            payloadBuffer.writeInteger(req.pflags, as: UInt32.self)
-            try encodeAttributes(&payloadBuffer, attrs: req.attrs)
-
-        case let req as SFTPReadRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeHandle(&payloadBuffer, req.handle)
-            payloadBuffer.writeInteger(req.offset, as: UInt64.self)
-            payloadBuffer.writeInteger(req.length, as: UInt32.self)
-
-        case let req as SFTPWriteRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeHandle(&payloadBuffer, req.handle)
-            payloadBuffer.writeInteger(req.offset, as: UInt64.self)
-            payloadBuffer.writeInteger(UInt32(req.data.readableBytes), as: UInt32.self)
-            var data = req.data
-            payloadBuffer.writeBuffer(&data)
-
-        case let req as SFTPRealpathRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.path)
-
-        case let req as SFTPStatRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.path)
-
-        case let req as SFTPLstatRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.path)
-
-        case let req as SFTPFstatRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeHandle(&payloadBuffer, req.handle)
-
-        case let req as SFTPRemoveRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.path)
-
-        case let req as SFTPMkdirRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.path)
-            try encodeAttributes(&payloadBuffer, attrs: req.attrs)
-
-        case let req as SFTPRmdirRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.path)
-
-        case let req as SFTPRenameRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.oldPath)
-            try writeString(&payloadBuffer, req.newPath)
-
-        case let req as SFTPSetstatRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.path)
-            try encodeAttributes(&payloadBuffer, attrs: req.attrs)
-
-        case let req as SFTPFsetstatRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeHandle(&payloadBuffer, req.handle)
-            try encodeAttributes(&payloadBuffer, attrs: req.attrs)
-
-        case let req as SFTPSymlinkRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.targetPath)
-            try writeString(&payloadBuffer, req.linkPath)
-
-        case let req as SFTPReadlinkRequest:
-            payloadBuffer.writeInteger(req.type.rawValue, as: UInt8.self)
-            payloadBuffer.writeInteger(req.id, as: UInt32.self)
-            try writeString(&payloadBuffer, req.path)
-
-        default:
-            throw SFTPError.encodingFailed("Unknown request type")
-        }
+        try request.encode(into: &payloadBuffer)
 
         var result = ByteBufferAllocator().buffer(capacity: payloadBuffer.readableBytes + 4)
         result.writeInteger(UInt32(payloadBuffer.readableBytes), as: UInt32.self)
@@ -459,20 +511,6 @@ final class SFTPProtocol: @unchecked Sendable {
         }
     }
 
-    private func writeString(_ buffer: inout ByteBuffer, _ string: String) throws {
-        let data = string.utf8
-        guard data.count <= UInt32.max else {
-            throw SFTPError.encodingFailed("String too long")
-        }
-        buffer.writeInteger(UInt32(data.count), as: UInt32.self)
-        buffer.writeBytes(data)
-    }
-
-    private func writeHandle(_ buffer: inout ByteBuffer, _ handle: SFTPHandle) throws {
-        buffer.writeInteger(UInt32(handle.bytes.readableBytes), as: UInt32.self)
-        buffer.writeBytes(handle.bytes.readableBytesView)
-    }
-
     private func readHandle(_ buffer: inout ByteBuffer) throws -> SFTPHandle {
         guard let length = buffer.readInteger(as: UInt32.self),
               let handleData = buffer.readBytes(length: Int(length)) else {
@@ -489,33 +527,6 @@ final class SFTPProtocol: @unchecked Sendable {
             return nil
         }
         return String(bytes: data, encoding: .utf8)
-    }
-
-    private func encodeAttributes(_ buffer: inout ByteBuffer, attrs: SFTPFileAttributes) throws {
-        var flags: UInt32 = 0
-        if attrs.size != nil { flags |= 0x00000001 }
-        if attrs.permissions != nil { flags |= 0x00000004 }
-        if attrs.uid != nil || attrs.gid != nil { flags |= 0x00000002 }
-        if attrs.accessTime != nil || attrs.modifyTime != nil { flags |= 0x00000008 }
-
-        buffer.writeInteger(flags, as: UInt32.self)
-
-        if let size = attrs.size {
-            buffer.writeInteger(size, as: UInt64.self)
-        }
-        if let uid = attrs.uid, let gid = attrs.gid {
-            buffer.writeInteger(uid, as: UInt32.self)
-            buffer.writeInteger(gid, as: UInt32.self)
-        }
-        if let permissions = attrs.permissions {
-            buffer.writeInteger(permissions, as: UInt32.self)
-        }
-        if let atime = attrs.accessTime {
-            buffer.writeInteger(atime, as: UInt32.self)
-        }
-        if let mtime = attrs.modifyTime {
-            buffer.writeInteger(mtime, as: UInt32.self)
-        }
     }
 
     private func decodeAttributes(_ buffer: inout ByteBuffer) throws -> SFTPFileAttributes {
