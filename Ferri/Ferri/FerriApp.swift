@@ -39,6 +39,23 @@ struct FerriApp: App {
                 }
                 .keyboardShortcut("r", modifiers: .command)
             }
+
+            CommandMenu("Go") {
+                Button("Back") {
+                    NotificationCenter.default.post(name: .navigateBack, object: nil)
+                }
+                .keyboardShortcut("[", modifiers: .command)
+
+                Button("Forward") {
+                    NotificationCenter.default.post(name: .navigateForward, object: nil)
+                }
+                .keyboardShortcut("]", modifiers: .command)
+
+                Button("Enclosing Folder") {
+                    NotificationCenter.default.post(name: .navigateUp, object: nil)
+                }
+                .keyboardShortcut(.upArrow, modifiers: .command)
+            }
         }
     }
 }
@@ -46,4 +63,7 @@ struct FerriApp: App {
 extension Notification.Name {
     static let newConnection = Notification.Name("newConnection")
     static let refresh = Notification.Name("refresh")
+    static let navigateBack = Notification.Name("navigateBack")
+    static let navigateForward = Notification.Name("navigateForward")
+    static let navigateUp = Notification.Name("navigateUp")
 }

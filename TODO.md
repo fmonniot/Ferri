@@ -214,10 +214,10 @@ design* and should be removed, not finished.
 
 ### H. App-level commands / keyboard shortcuts
 
-- [ ] **Menu commands are wired to nothing.** `FerriApp` posts `.newConnection` and `.refresh`
+- [x] **Menu commands are wired to nothing.** `FerriApp` posts `.newConnection` and `.refresh`
       notifications, but no view observes them (no `onReceive`/`NotificationCenter` subscriber). So ⌘N and
       ⌘R menu items do nothing.
-- [ ] **Missing navigation shortcuts.** SPEC §5 lists ⌘[ (back), ⌘] (forward), ⌘↑ (parent); none are bound.
+- [x] **Missing navigation shortcuts.** SPEC §5 lists ⌘[ (back), ⌘] (forward), ⌘↑ (parent); none are bound.
 
 ### I. Cleanup (not design-driven, noticed while diffing)
 

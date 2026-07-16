@@ -99,6 +99,26 @@ struct MainView: View {
                 connect(to: server)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .newConnection)) { _ in
+            editingConnection = nil
+            showingConnectionSheet = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .refresh)) { _ in
+            guard isConnected else { return }
+            Task { await fileBrowserViewModel.refresh() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateBack)) { _ in
+            guard isConnected else { return }
+            fileBrowserViewModel.goBack()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateForward)) { _ in
+            guard isConnected else { return }
+            fileBrowserViewModel.goForward()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateUp)) { _ in
+            guard isConnected else { return }
+            Task { await fileBrowserViewModel.goUp() }
+        }
     }
 
     private func connectingOverlay(host: String) -> some View {
