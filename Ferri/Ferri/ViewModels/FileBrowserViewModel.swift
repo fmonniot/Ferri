@@ -147,30 +147,8 @@ final class FileBrowserViewModel: ObservableObject {
     }
     
     func downloadFile(_ file: RemoteFile, to localURL: URL, transferQueue: TransferQueueViewModel) {
-        let item = TransferItem(
-            fileName: file.name,
-            localPath: localURL.path,
-            remotePath: file.path,
-            direction: .download,
-            fileSize: file.size,
-            status: .queued
-        )
-        transferQueue.addTransfer(item)
-
-        Task {
-            let startTime = Date()
-            do {
-                try await ftpClient.downloadFile(named: file.name, to: localURL) { bytesTransferred, _ in
-                    Task { @MainActor in
-                        let elapsed = Date().timeIntervalSince(startTime)
-                        let speed = elapsed > 0 ? Double(bytesTransferred) / elapsed : nil
-                        transferQueue.updateTransfer(id: item.id, bytesTransferred: bytesTransferred, bytesPerSecond: speed)
-                    }
-                }
-                transferQueue.updateTransfer(id: item.id, status: .completed)
-            } catch {
-                transferQueue.updateTransfer(id: item.id, status: .failed, errorMessage: error.localizedDescription)
-            }
-        }
+        // The transfer queue owns the download lifecycle (progress, speed, pause/resume),
+        // so it can interrupt and resume the underlying SFTP stream.
+        transferQueue.startDownload(file: file, to: localURL)
     }
 }

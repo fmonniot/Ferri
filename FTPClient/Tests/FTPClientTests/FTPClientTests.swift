@@ -781,6 +781,55 @@ struct SFTPIntegrationTests {
         try await client.disconnect()
     }
 
+    /// Verifies byte-exact resume: seeding a partial local file (with an arbitrary,
+    /// non-chunk-aligned prefix plus trailing garbage) and downloading with a matching
+    /// `resumeOffset` must reproduce the full remote file exactly — the resume path seeks to
+    /// the offset, truncates the garbage, and continues from there.
+    @Test
+    func downloadResumesFromOffset() async throws {
+        try skipUnlessCompose()
+
+        let containerFilePath = "/home/testuser/upload/resume_test.bin"
+        let remoteFilePath = "/upload/resume_test.bin"
+        // 256KB random file spanning several 64KB read chunks.
+        SFTPIntegrationTests.composeExec(["bash", "-c", "dd if=/dev/urandom of=\(containerFilePath) bs=1024 count=256 2>/dev/null"])
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let refURL = tempDir.appendingPathComponent("resume_ref_\(UUID().uuidString.prefix(8)).bin")
+        let partialURL = tempDir.appendingPathComponent("resume_partial_\(UUID().uuidString.prefix(8)).bin")
+        defer {
+            try? FileManager.default.removeItem(at: refURL)
+            try? FileManager.default.removeItem(at: partialURL)
+        }
+
+        let client = makeClient()
+        try await connectClient(client)
+
+        do {
+            // Reference: a full, fresh download.
+            try await client.downloadToFile(remotePath: remoteFilePath, localURL: refURL)
+            let full = try Data(contentsOf: refURL)
+            #expect(full.count == 256 * 1024)
+
+            // Seed a partial file: an arbitrary, non-chunk-aligned prefix plus trailing
+            // garbage that resume must truncate away.
+            let resumeOffset = 100_000
+            var seeded = Data(full.prefix(resumeOffset))
+            seeded.append(contentsOf: [0xDE, 0xAD, 0xBE, 0xEF])
+            try seeded.write(to: partialURL)
+
+            // Resume from the offset; the result must be byte-identical to the full download.
+            try await client.downloadToFile(remotePath: remoteFilePath, localURL: partialURL, resumeOffset: UInt64(resumeOffset))
+            let resumed = try Data(contentsOf: partialURL)
+            #expect(resumed == full, "Resumed file is not byte-identical to a full download")
+        } catch {
+            try await client.disconnect()
+            throw error
+        }
+
+        try await client.disconnect()
+    }
+
     @Test
     func downloadNonExistentFile() async throws {
         try skipUnlessCompose()

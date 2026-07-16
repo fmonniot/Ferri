@@ -77,11 +77,11 @@ public final class FTPClient: FTPClientProtocol, @unchecked Sendable {
         try await changeDirectory(to: "..")
     }
 
-    public func downloadFile(named fileName: String, to localURL: URL, progress: (@Sendable (Int64, Int64?) -> Void)? = nil) async throws {
-        logger.debug("downloadFile(named: \(fileName)) called")
+    public func downloadFile(named fileName: String, to localURL: URL, resumeOffset: Int64 = 0, progress: (@Sendable (Int64, Int64?) -> Void)? = nil) async throws {
+        logger.debug("downloadFile(named: \(fileName), resumeOffset: \(resumeOffset)) called")
         guard let client = client else { throw FTPClientError.notConnected }
 
-        try await client.downloadToFile(remotePath: fileName, localURL: localURL) { bytesWritten, totalSize in
+        try await client.downloadToFile(remotePath: fileName, localURL: localURL, resumeOffset: UInt64(max(0, resumeOffset))) { bytesWritten, totalSize in
             progress?(Int64(bytesWritten), totalSize.map { Int64($0) })
         }
     }

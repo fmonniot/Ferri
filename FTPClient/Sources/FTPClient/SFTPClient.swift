@@ -297,13 +297,25 @@ public actor SFTPClient {
         currentPath
     }
 
-    public func downloadToFile(remotePath: String, localURL: URL, progress: (@Sendable (UInt64, UInt64?) -> Void)? = nil) async throws {
+    /// Downloads a remote file to `localURL`.
+    ///
+    /// - Parameter resumeOffset: byte offset to resume from. When `0` (the default) the local
+    ///   file is created fresh. When `> 0` the existing local file is opened, seeked to
+    ///   `resumeOffset`, and truncated there (dropping any partial trailing bytes) so the
+    ///   transfer continues byte-exact — SFTP reads are offset-addressed, so this is all it
+    ///   takes to resume a previously interrupted download.
+    ///
+    /// The download observes cooperative task cancellation: if the calling `Task` is cancelled
+    /// mid-transfer, the loop stops issuing new reads, drains the reads already in flight to a
+    /// clean byte boundary, closes the file (leaving the partial bytes on disk for a later
+    /// resume), and throws `CancellationError`.
+    public func downloadToFile(remotePath: String, localURL: URL, resumeOffset: UInt64 = 0, progress: (@Sendable (UInt64, UInt64?) -> Void)? = nil) async throws {
         guard isConnectedFlag else {
             throw SFTPClientError.notConnected
         }
 
         let absolutePath = resolvePath(remotePath)
-        logger.info("Starting download: \(absolutePath) -> \(localURL.lastPathComponent)")
+        logger.info("Starting download: \(absolutePath) -> \(localURL.lastPathComponent) (resume @ \(resumeOffset))")
 
         let handle = try await openFile(path: absolutePath, flags: 0x00000001)
 
@@ -311,8 +323,17 @@ public actor SFTPClient {
         let totalSize = fileAttrs.size
         logger.info("File size: \(totalSize.map { "\($0) bytes" } ?? "unknown")")
 
-        FileManager.default.createFile(atPath: localURL.path, contents: nil)
-        let fileHandle = try FileHandle(forWritingTo: localURL)
+        let fileHandle: FileHandle
+        if resumeOffset > 0 {
+            // Resume: reuse the partial file already on disk, discarding anything past the
+            // resume point so writes continue exactly where the previous run stopped.
+            fileHandle = try FileHandle(forWritingTo: localURL)
+            try fileHandle.seek(toOffset: resumeOffset)
+            try fileHandle.truncate(atOffset: resumeOffset)
+        } else {
+            FileManager.default.createFile(atPath: localURL.path, contents: nil)
+            fileHandle = try FileHandle(forWritingTo: localURL)
+        }
 
         do {
             // Use 64KB chunks — the practical max for SFTP v3. Most servers
@@ -323,16 +344,30 @@ public actor SFTPClient {
             // from 1 RTT per chunk into ~1 RTT per 16 chunks.
             let maxInFlight = 16
 
-            var nextOffset: UInt64 = 0
-            var bytesWritten: UInt64 = 0
+            var nextOffset: UInt64 = resumeOffset
+            var bytesWritten: UInt64 = resumeOffset
             var eof = false
+            // Set once cancellation is observed: stop submitting new reads, but keep draining
+            // the reads already in flight so we stop on a clean, well-defined byte boundary.
+            var stopRequested = false
+
+            // If we're already at (or past) a known EOF, there's nothing to do.
+            if let total = totalSize, nextOffset >= total {
+                eof = true
+            }
 
             // Pending futures in submission order so we write sequentially.
             var pipeline: [(offset: UInt64, task: Task<ByteBuffer, Error>)] = []
 
             while !eof || !pipeline.isEmpty {
-                // Fill the pipeline up to maxInFlight requests.
-                while !eof && pipeline.count < maxInFlight {
+                // Observe cooperative cancellation (pause / remove). Latch it so we drain the
+                // in-flight pipeline exactly once and then bail out below.
+                if !stopRequested && Task.isCancelled {
+                    stopRequested = true
+                }
+
+                // Fill the pipeline up to maxInFlight requests (never while stopping).
+                while !stopRequested && !eof && pipeline.count < maxInFlight {
                     let readOffset = nextOffset
                     let readHandle = handle
                     let readLength = chunkSize
@@ -386,6 +421,16 @@ public actor SFTPClient {
                 if data.readableBytes < Int(chunkSize) {
                     eof = true
                 }
+            }
+
+            if stopRequested {
+                // Interrupted (pause / remove): flush what we drained and leave it on disk so a
+                // later resume can continue from `bytesWritten`. Close the remote handle before
+                // surfacing the cancellation.
+                logger.info("Download interrupted: \(absolutePath) (\(bytesWritten) bytes on disk)")
+                try fileHandle.close()
+                try? await closeHandle(handle)
+                throw CancellationError()
             }
 
             logger.info("Download complete: \(absolutePath) (\(bytesWritten) bytes)")

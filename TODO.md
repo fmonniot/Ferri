@@ -131,10 +131,16 @@ design* and should be removed, not finished.
 
 ### A. Transfer queue (biggest gaps — "Pause & resume" is a headline feature)
 
-- [x] **Pause / Resume per transfer is entirely missing.** `TransferStatus` now has a `.paused` case and
-      `TransferRow` renders a per-row play/pause control (`TransferQueueViewModel.togglePause`). This is a
-      **UI-only stub**: toggling status doesn't actually interrupt/resume the underlying SFTP download
-      stream yet — that's real protocol work left for a follow-up session (see `SFTPClient.downloadToFile`).
+- [x] **Pause / Resume per transfer.** `TransferStatus` has a `.paused` case and `TransferRow` renders a
+      per-row play/pause control. Pause now actually **interrupts** the live SFTP stream and resume
+      **continues byte-exact** from the on-disk offset. `TransferQueueViewModel` owns the download lifecycle
+      (`startDownload` + a per-id task/stop-intent map); `togglePause` cancels the download task, and
+      `SFTPClient.downloadToFile(resumeOffset:)` observes cooperative cancellation — it drains in-flight
+      reads to a clean byte boundary, leaves the partial file on disk, and throws `CancellationError`, which
+      the VM resolves to `.paused` vs `.cancelled` via intent. Resume reopens the file, seeks/truncates to
+      the offset, and reads on. Remove/cancel leave the partial file. Covered by
+      `TransferQueueViewModelTests` (pause→resume-from-offset, resume-to-completion) and the
+      `downloadResumesFromOffset` integration test.
 - [x] **Live progress never updates.** `FileBrowserViewModel.downloadFile` wires
       `SFTPClient.downloadToFile(..., progress:)` through `FTPClient.downloadFile` /
       `FTPClientProtocol` into the `TransferItem`; progress bar and status now update correctly.

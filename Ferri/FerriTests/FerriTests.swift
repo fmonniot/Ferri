@@ -18,9 +18,17 @@ final class MockFTPClient: FTPClientProtocol, @unchecked Sendable {
     var listDirectoryError: Error = FTPClientError.notConnected
     var mockCurrentPath = "/"
 
+    /// When true, `downloadFile` streams progress slowly (in `slowChunk`-sized steps every
+    /// `slowChunkDelayNanos`) up to `slowTotalBytes`, honoring task cancellation by throwing
+    /// `CancellationError`. Lets VM tests observe pause/resume against a live-ish transfer.
+    var simulateSlowDownload = false
+    var slowTotalBytes: Int64 = 1_000_000
+    var slowChunk: Int64 = 100_000
+    var slowChunkDelayNanos: UInt64 = 20_000_000 // 20ms
+
     // MARK: Call tracking
 
-    private(set) var downloadCalls: [(fileName: String, localURL: URL)] = []
+    private(set) var downloadCalls: [(fileName: String, localURL: URL, resumeOffset: Int64)] = []
     private(set) var listDirectoryCalls: [String] = []
     private(set) var connectCalls: [FTPServer] = []
     private(set) var disconnectCallCount = 0
@@ -71,9 +79,22 @@ final class MockFTPClient: FTPClientProtocol, @unchecked Sendable {
         try await changeDirectory(to: "..")
     }
 
-    func downloadFile(named fileName: String, to localURL: URL, progress: (@Sendable (Int64, Int64?) -> Void)?) async throws {
-        downloadCalls.append((fileName, localURL))
+    func downloadFile(named fileName: String, to localURL: URL, resumeOffset: Int64, progress: (@Sendable (Int64, Int64?) -> Void)?) async throws {
+        downloadCalls.append((fileName, localURL, resumeOffset))
         if shouldFailDownload { throw downloadError }
+
+        if simulateSlowDownload {
+            // Report progress in steps until either the transfer completes or the task is
+            // cancelled (pause / remove) — Task.sleep throws CancellationError on cancel.
+            var written = resumeOffset
+            while written < slowTotalBytes {
+                written = min(written + slowChunk, slowTotalBytes)
+                progress?(written, slowTotalBytes)
+                try await Task.sleep(nanoseconds: slowChunkDelayNanos)
+            }
+            return
+        }
+
         // Create a dummy file so tests can verify the file exists
         let content = "mock content"
         progress?(Int64(content.utf8.count), Int64(content.utf8.count))
@@ -350,6 +371,81 @@ struct TransferQueueViewModelTests {
         vm.retryTransfer(id: item.id)
         #expect(vm.transfers[0].status == .inProgress) // unchanged
     }
+
+    // MARK: Pause / resume
+
+    private func makeSlowFile() -> RemoteFile {
+        RemoteFile(name: "big.bin", path: "/remote/big.bin", isDirectory: false, size: 1_000_000)
+    }
+
+    /// Polls until `condition` holds or a timeout elapses, letting async progress/finish
+    /// callbacks hop back to the main actor between checks.
+    private func waitUntil(timeoutMs: Int = 2000, _ condition: () -> Bool) async {
+        let deadline = Date().addingTimeInterval(Double(timeoutMs) / 1000)
+        while !condition() && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 5_000_000) // 5ms
+        }
+    }
+
+    @Test
+    func pauseInterruptsDownloadAndResumeContinuesFromOffset() async throws {
+        let mock = MockFTPClient()
+        mock.simulateSlowDownload = true
+        let vm = TransferQueueViewModel(ftpClient: mock)
+
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("pause_\(UUID().uuidString).bin")
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        vm.startDownload(file: makeSlowFile(), to: tempURL)
+        let id = vm.transfers[0].id
+
+        // Let some bytes flow, then pause.
+        await waitUntil { vm.transfers.first?.bytesTransferred ?? 0 > 0 }
+        let bytesAtPause = vm.transfers[0].bytesTransferred
+        #expect(bytesAtPause > 0)
+
+        vm.togglePause(id: id)
+
+        // The download task drains and settles on .paused (not .failed/.cancelled). The row
+        // only reaches .paused once the task has fully unwound, so this is also the signal
+        // that a resume can start cleanly.
+        await waitUntil { vm.transfers.first?.status == .paused }
+        #expect(vm.transfers[0].status == .paused)
+        #expect(mock.downloadCalls.count == 1)
+
+        let bytesWhilePaused = vm.transfers[0].bytesTransferred
+
+        // Resume: a second download starts from the paused byte offset.
+        vm.togglePause(id: id)
+        #expect(vm.transfers[0].status == .inProgress)
+
+        await waitUntil { mock.downloadCalls.count == 2 }
+        #expect(mock.downloadCalls.count == 2)
+        #expect(mock.downloadCalls[1].resumeOffset == bytesWhilePaused)
+    }
+
+    @Test
+    func pausedDownloadCanRunToCompletionAfterResume() async throws {
+        let mock = MockFTPClient()
+        mock.simulateSlowDownload = true
+        mock.slowTotalBytes = 300_000
+        mock.slowChunk = 100_000
+        let vm = TransferQueueViewModel(ftpClient: mock)
+
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("resume_\(UUID().uuidString).bin")
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        vm.startDownload(file: makeSlowFile(), to: tempURL)
+        let id = vm.transfers[0].id
+
+        await waitUntil { vm.transfers.first?.bytesTransferred ?? 0 > 0 }
+        vm.togglePause(id: id)
+        await waitUntil { vm.transfers.first?.status == .paused }
+
+        vm.togglePause(id: id)
+        await waitUntil { vm.transfers.first?.status == .completed }
+        #expect(vm.transfers[0].status == .completed)
+    }
 }
 
 // MARK: - FileBrowserViewModel Tests
@@ -493,7 +589,8 @@ struct FileBrowserViewModelTests {
     func downloadFileCreatesTransferItemAndCallsClient() async throws {
         let mock = makeMockClient(files: sampleFiles())
         let vm = FileBrowserViewModel(ftpClient: mock)
-        let queue = TransferQueueViewModel()
+        // The queue owns the download, so it must talk to the same mock client.
+        let queue = TransferQueueViewModel(ftpClient: mock)
 
         let file = RemoteFile(name: "readme.txt", path: "/home/readme.txt", isDirectory: false, size: 1024)
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("test_\(UUID().uuidString).txt")
@@ -510,7 +607,9 @@ struct FileBrowserViewModelTests {
         // Wait briefly for the background Task to call the mock
         try await Task.sleep(nanoseconds: 100_000_000) // 100ms
         #expect(mock.downloadCalls.count == 1)
-        #expect(mock.downloadCalls[0].fileName == "readme.txt")
+        // The download addresses the file by its absolute remote path.
+        #expect(mock.downloadCalls[0].fileName == "/home/readme.txt")
+        #expect(mock.downloadCalls[0].resumeOffset == 0)
     }
 
     @Test
