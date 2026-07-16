@@ -40,6 +40,7 @@ let package = Package(
             dependencies: [
                 "FTPClient",
                 .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "Crypto", package: "swift-crypto"),
             ]
         ),
     ]

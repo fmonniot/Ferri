@@ -8,6 +8,7 @@
 import Foundation
 import Testing
 import NIOCore
+import Crypto
 @testable import FTPClient
 
 // MARK: - SFTP Protocol Unit Tests
@@ -504,6 +505,21 @@ struct SFTPIntegrationTests {
         return process.terminationStatus
     }
 
+    /// Copy a local file into the sftp container via `docker compose cp`, preserving bytes
+    /// exactly (unlike round-tripping through a shell command).
+    @discardableResult
+    static func composeCopy(from localURL: URL, toContainerPath containerPath: String) -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: dockerPath())
+        process.arguments = ["compose", "cp", localURL.path, "sftp:\(containerPath)"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        process.currentDirectoryURL = composeDirURL()
+        try? process.run()
+        process.waitUntilExit()
+        return process.terminationStatus
+    }
+
     /// URL of the FTPClient package directory (where docker-compose.yml lives).
     private static func composeDirURL() -> URL {
         // The test bundle is inside FTPClient/.build/… — walk up to the package root.
@@ -822,6 +838,127 @@ struct SFTPIntegrationTests {
             try await client.downloadToFile(remotePath: remoteFilePath, localURL: partialURL, resumeOffset: UInt64(resumeOffset))
             let resumed = try Data(contentsOf: partialURL)
             #expect(resumed == full, "Resumed file is not byte-identical to a full download")
+        } catch {
+            try await client.disconnect()
+            throw error
+        }
+
+        try await client.disconnect()
+    }
+
+    /// Verifies a downloaded file's contents match the source exactly, using a SHA-256
+    /// hash comparison (in addition to a raw byte comparison) as the integrity check.
+    @Test
+    func downloadIntegrityMatchesSourceHash() async throws {
+        try skipUnlessCompose()
+
+        let sourceData = Data((0..<(300 * 1024)).map { _ in UInt8.random(in: 0...255) })
+        let sourceURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("integrity_source_\(UUID().uuidString.prefix(8)).bin")
+        let destURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("integrity_dest_\(UUID().uuidString.prefix(8)).bin")
+        defer {
+            try? FileManager.default.removeItem(at: sourceURL)
+            try? FileManager.default.removeItem(at: destURL)
+        }
+        try sourceData.write(to: sourceURL)
+
+        let containerPath = "/home/testuser/upload/integrity_test.bin"
+        let remotePath = "/upload/integrity_test.bin"
+        SFTPIntegrationTests.composeCopy(from: sourceURL, toContainerPath: containerPath)
+
+        let client = makeClient()
+        try await connectClient(client)
+
+        do {
+            try await client.downloadToFile(remotePath: remotePath, localURL: destURL)
+
+            let downloadedData = try Data(contentsOf: destURL)
+            #expect(downloadedData == sourceData, "Downloaded bytes differ from source")
+
+            let sourceHash = SHA256.hash(data: sourceData)
+            let downloadedHash = SHA256.hash(data: downloadedData)
+            #expect(downloadedHash == sourceHash, "SHA-256 mismatch between downloaded file and source")
+        } catch {
+            try await client.disconnect()
+            throw error
+        }
+
+        try await client.disconnect()
+    }
+
+    /// Same integrity check as `downloadIntegrityMatchesSourceHash`, but exercises the actual
+    /// pause/resume path: the in-flight download is cancelled mid-transfer (the same
+    /// cooperative-cancellation mechanism the app uses to implement "pause" — see
+    /// `SFTPClient.downloadToFile`), then resumed from whatever partial bytes made it to disk.
+    /// The reassembled file must still hash identically to the source.
+    @Test
+    func downloadIntegrityMatchesSourceHashAfterPauseResume() async throws {
+        try skipUnlessCompose()
+
+        // Large enough to span many 64KB chunks so cancellation reliably lands mid-transfer.
+        let sourceData = Data((0..<(2 * 1024 * 1024)).map { _ in UInt8.random(in: 0...255) })
+        let sourceURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("integrity_pr_source_\(UUID().uuidString.prefix(8)).bin")
+        let destURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("integrity_pr_dest_\(UUID().uuidString.prefix(8)).bin")
+        defer {
+            try? FileManager.default.removeItem(at: sourceURL)
+            try? FileManager.default.removeItem(at: destURL)
+        }
+        try sourceData.write(to: sourceURL)
+
+        let containerPath = "/home/testuser/upload/integrity_pause_resume_test.bin"
+        let remotePath = "/upload/integrity_pause_resume_test.bin"
+        SFTPIntegrationTests.composeCopy(from: sourceURL, toContainerPath: containerPath)
+
+        let client = makeClient()
+        try await connectClient(client)
+
+        do {
+            // Signal once the download has made enough progress to cancel mid-transfer.
+            let (thresholdStream, thresholdContinuation) = AsyncStream<Void>.makeStream()
+            nonisolated(unsafe) var signaled = false
+
+            let downloadTask = Task<Void, Error> {
+                try await client.downloadToFile(
+                    remotePath: remotePath,
+                    localURL: destURL,
+                    progress: { bytesRead, _ in
+                        if bytesRead > 512 * 1024 && !signaled {
+                            signaled = true
+                            thresholdContinuation.yield()
+                            thresholdContinuation.finish()
+                        }
+                    }
+                )
+            }
+
+            var iterator = thresholdStream.makeAsyncIterator()
+            _ = await iterator.next()
+            downloadTask.cancel()
+
+            do {
+                try await downloadTask.value
+                Issue.record("Expected cancellation to interrupt the download")
+            } catch is CancellationError {
+                // Expected — the download was paused mid-transfer.
+            }
+
+            let partialAttrs = try FileManager.default.attributesOfItem(atPath: destURL.path)
+            let partialSize = partialAttrs[.size] as? UInt64 ?? 0
+            #expect(partialSize > 0, "Expected some bytes to be written before cancellation")
+            #expect(partialSize < UInt64(sourceData.count), "Expected download to be interrupted before completion")
+
+            // Resume from wherever the paused download left off.
+            try await client.downloadToFile(remotePath: remotePath, localURL: destURL, resumeOffset: partialSize)
+
+            let downloadedData = try Data(contentsOf: destURL)
+            #expect(downloadedData == sourceData, "Downloaded bytes differ from source after resume")
+
+            let sourceHash = SHA256.hash(data: sourceData)
+            let downloadedHash = SHA256.hash(data: downloadedData)
+            #expect(downloadedHash == sourceHash, "SHA-256 mismatch after pause/resume")
         } catch {
             try await client.disconnect()
             throw error
