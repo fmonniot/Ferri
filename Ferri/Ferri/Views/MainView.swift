@@ -26,7 +26,8 @@ struct MainView: View {
                 FileBrowserView(
                     viewModel: fileBrowserViewModel,
                     transferQueue: transferQueueViewModel,
-                    isConnected: isConnected
+                    isConnected: isConnected,
+                    hostLabel: connectionViewModel.selectedConnection?.displayName ?? ""
                 )
                 
                 TransferQueueView(

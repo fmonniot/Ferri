@@ -168,23 +168,22 @@ design* and should be removed, not finished.
 
 ### C. Missing file-context-menu items (design)
 
-- [ ] **Get Info** — present in design context menu, absent in app.
-- [ ] **Copy Path** — present in design context menu, absent in app.
+- [x] **Get Info** — file context menu now shows a "Get Info" sheet (name, path, size, date, permissions).
+- [x] **Copy Path** — file context menu now has "Copy Path" (copies `file.path` to the pasteboard).
 
 ### D. Path bar / breadcrumbs
 
-- [ ] **No breadcrumb path bar.** Design shows a clickable breadcrumb trail (`host › folder › folder`) with
-      an item count ("N items") on the right, above the file list. App uses `.navigationTitle(currentPath)`
-      (a plain string in the title bar) — no clickable segments, no item count.
+- [x] **No breadcrumb path bar.** `FileBrowserView` now has a clickable breadcrumb bar (`host › folder ›
+      folder`) with an item count on the right, replacing `.navigationTitle(currentPath)`. Window title now
+      shows the host/connection name instead.
 
 ### E. File list presentation
 
-- [ ] **No colored file-type badges.** Design renders files as a document glyph with a color-coded extension
-      label (SQL/PNG/JS/…). App uses a generic SF Symbol from `RemoteFile.icon`. Consider an ext→label/color
-      map like the prototype's `extMeta`.
-- [ ] **Row selection highlight.** Design highlights the selected row (accent background, white text) on
-      single click. Verify SwiftUI `Table` selection actually renders this (manual TODO already flags "No
-      selection of file"); if not, needs styling.
+- [x] **No colored file-type badges.** Added `FileTypeMeta` (ext→label/color map ported from the prototype's
+      `extMeta`) rendering a small colored badge in place of the generic doc SF Symbol for files; folders
+      keep a blue folder icon.
+- [x] **Row selection highlight.** Table cells now explicitly render an accent background + white text when
+      `selectedFiles` contains the row's id, driven by the same `Table(selection:)` binding.
 - [ ] Note: manual TODO items "Double click on a folder doesn't open it", "Refresh moves back to root", and
       "sort" are all part of the file-list behavior the prototype gets right (double-click opens, sortable
       column headers with ▲/▼ arrows, dirs always sorted before files).
