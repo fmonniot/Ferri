@@ -19,6 +19,8 @@ struct FileBrowserView: View {
                 emptyStateView
             } else if viewModel.isLoading {
                 loadingView
+            } else if viewModel.isPermissionDenied {
+                permissionDeniedView
             } else if let error = viewModel.errorMessage {
                 errorView(error)
             } else if viewModel.files.isEmpty {
@@ -92,7 +94,7 @@ struct FileBrowserView: View {
 
             Spacer(minLength: 8)
 
-            if !viewModel.isLoading && viewModel.errorMessage == nil {
+            if !viewModel.isLoading && viewModel.errorMessage == nil && !viewModel.isPermissionDenied {
                 Text(itemCountText)
                     .font(.system(size: 11.5))
                     .foregroundColor(.secondary)
@@ -167,6 +169,27 @@ struct FileBrowserView: View {
             Button("Retry") {
                 Task { await viewModel.refresh() }
             }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var permissionDeniedView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "lock.shield")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+            Text("Permission Denied")
+                .font(.title2)
+                .fontWeight(.medium)
+            Text("You don't have permission to access this folder")
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Go Back") {
+                Task { await viewModel.goUp() }
+            }
+            .disabled(!viewModel.canGoUp)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)

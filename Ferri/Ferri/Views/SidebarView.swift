@@ -5,7 +5,9 @@ struct SidebarView: View {
     @ObservedObject var viewModel: ConnectionListViewModel
     @Binding var showingConnectionSheet: Bool
     @Binding var editingConnection: FTPServer?
-    
+    var onConnect: (FTPServer) -> Void
+    var onDisconnect: (FTPServer) -> Void
+
     var body: some View {
         List(selection: $viewModel.selectedConnection) {
             ForEach(viewModel.connections) { connection in
@@ -14,10 +16,20 @@ struct SidebarView: View {
                     status: viewModel.connectionStatus[connection.id] ?? .disconnected
                 )
                 .tag(connection)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    viewModel.selectConnection(connection)
+                    onConnect(connection)
+                }
                 .contextMenu {
                     Button("Connect") {
-                        // Connect action handled by parent
+                        viewModel.selectConnection(connection)
+                        onConnect(connection)
                     }
+                    Button("Disconnect") {
+                        onDisconnect(connection)
+                    }
+                    Divider()
                     Button("Edit") {
                         editingConnection = connection
                         showingConnectionSheet = true

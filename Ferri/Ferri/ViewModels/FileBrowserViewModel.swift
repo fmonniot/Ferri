@@ -20,6 +20,7 @@ final class FileBrowserViewModel: ObservableObject {
     @Published var currentPath: String = "/"
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var isPermissionDenied = false
     @Published var sortColumn: SortColumn = .name
     @Published var sortOrder: SortOrder = .ascending
     
@@ -53,17 +54,23 @@ final class FileBrowserViewModel: ObservableObject {
     func loadDirectory(at path: String = "") async {
         isLoading = true
         errorMessage = nil
-        
+        isPermissionDenied = false
+
         do {
             let result = try await ftpClient.listDirectory(at: path)
             files = sortFiles(result)
             currentPath = ftpClient.currentPath
-            
+
             addToHistory(currentPath)
         } catch {
-            errorMessage = error.localizedDescription
+            // SFTP status code 3 is SSH_FX_PERMISSION_DENIED (SFTPv3 spec).
+            if case SFTPClientError.requestFailed(let code, _) = error, code == 3 {
+                isPermissionDenied = true
+            } else {
+                errorMessage = error.localizedDescription
+            }
         }
-        
+
         isLoading = false
     }
     
@@ -146,6 +153,16 @@ final class FileBrowserViewModel: ObservableObject {
         }
     }
     
+    func reset() {
+        files = []
+        currentPath = "/"
+        isLoading = false
+        errorMessage = nil
+        isPermissionDenied = false
+        pathHistory = []
+        historyIndex = -1
+    }
+
     func downloadFile(_ file: RemoteFile, to localURL: URL, transferQueue: TransferQueueViewModel) {
         // The transfer queue owns the download lifecycle (progress, speed, pause/resume),
         // so it can interrupt and resume the underlying SFTP stream.
