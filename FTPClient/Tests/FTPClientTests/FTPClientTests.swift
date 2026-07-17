@@ -503,7 +503,22 @@ struct RemoteFileTests {
 //   toxiproxy  – localhost:2223  (SFTP via proxy, latency injectable)
 //                localhost:8474  (toxiproxy REST API)
 
-@Suite(.serialized)
+// The @Suite attribute's arguments are type-checked before the type's own members are
+// available, so the "is the stack running" probe used by .enabled(if:) must live outside
+// SFTPIntegrationTests — referencing the type's own static members here causes a circular
+// reference error in the Suite macro.
+private func isSFTPComposeStackRunning() -> Bool {
+    let nc = Process()
+    nc.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
+    nc.arguments = ["-z", "-w", "2", "localhost", "2222"]
+    nc.standardOutput = FileHandle.nullDevice
+    nc.standardError = FileHandle.nullDevice
+    try? nc.run()
+    nc.waitUntilExit()
+    return nc.terminationStatus == 0
+}
+
+@Suite(.serialized, .enabled(if: isSFTPComposeStackRunning(), "Compose stack not running (docker compose up -d)"))
 struct SFTPIntegrationTests {
 
     // Fixed ports from docker-compose.yml
@@ -527,14 +542,7 @@ struct SFTPIntegrationTests {
 
     /// Check whether the compose stack is running by probing the SFTP port.
     static func isComposeRunning() -> Bool {
-        let nc = Process()
-        nc.executableURL = URL(fileURLWithPath: "/usr/bin/nc")
-        nc.arguments = ["-z", "-w", "2", "localhost", "\(directPort)"]
-        nc.standardOutput = FileHandle.nullDevice
-        nc.standardError = FileHandle.nullDevice
-        try? nc.run()
-        nc.waitUntilExit()
-        return nc.terminationStatus == 0
+        isSFTPComposeStackRunning()
     }
 
     /// Run a command inside the sftp container via `docker compose exec`.
