@@ -56,7 +56,7 @@ public actor SFTPClient {
     // Sendable and can be handed to the non-actor SFTPChannelHandler without unsafe opt-outs.
     let protocol_ = SFTPProtocol()
 
-    private(set) var currentPath: String = "/"
+    private var currentPath: SFTPPath = .root
 
     private var pendingRequests: [UInt32: CheckedContinuation<SFTPResponse, Error>] = [:]
 
@@ -132,7 +132,7 @@ public actor SFTPClient {
             logger.info("SFTP subsystem opened")
 
             isConnectedFlag = true
-            currentPath = "/"
+            currentPath = .root
             logger.info("Connected successfully")
         } catch {
             logger.error("Connection failed: \(error)")
@@ -235,7 +235,7 @@ public actor SFTPClient {
         sftpChannel = nil
         eventLoopGroup = nil
         isConnectedFlag = false
-        currentPath = "/"
+        currentPath = .root
     }
 
     // MARK: - Public API
@@ -245,9 +245,9 @@ public actor SFTPClient {
             throw SFTPClientError.notConnected
         }
 
-        let absolutePath = resolvePath(path)
+        let absolutePath = try resolvePath(path)
 
-        let handle = try await openDirectory(path: absolutePath, timeout: timeout)
+        let handle = try await openDirectory(path: absolutePath.string, timeout: timeout)
 
         var files: [RemoteFile] = []
 
@@ -259,9 +259,9 @@ public actor SFTPClient {
                 for entry in entries {
                     guard entry.filename != "." && entry.filename != ".." else { continue }
 
-                    let filePath = absolutePath.hasSuffix("/")
-                        ? absolutePath + entry.filename
-                        : absolutePath + "/" + entry.filename
+                    let filePath = absolutePath.string.hasSuffix("/")
+                        ? absolutePath.string + entry.filename
+                        : absolutePath.string + "/" + entry.filename
 
                     files.append(RemoteFile(
                         name: entry.filename,
@@ -292,9 +292,9 @@ public actor SFTPClient {
             throw SFTPClientError.notConnected
         }
 
-        let absolutePath = resolvePath(path)
+        let absolutePath = try resolvePath(path)
 
-        let attrs = try await stat(path: absolutePath)
+        let attrs = try await stat(path: absolutePath.string)
         guard attrs.isDirectory else {
             throw SFTPClientError.requestFailed(UInt32.max, "Not a directory: \(path)")
         }
@@ -303,7 +303,7 @@ public actor SFTPClient {
     }
 
     public func currentDirectory() -> String {
-        currentPath
+        currentPath.string
     }
 
     /// Downloads a remote file to `localURL`.
@@ -323,10 +323,10 @@ public actor SFTPClient {
             throw SFTPClientError.notConnected
         }
 
-        let absolutePath = resolvePath(remotePath)
+        let absolutePath = try resolvePath(remotePath)
         logger.info("Starting download: \(absolutePath) -> \(localURL.lastPathComponent) (resume @ \(resumeOffset))")
 
-        let handle = try await openFile(path: absolutePath, flags: 0x00000001)
+        let handle = try await openFile(path: absolutePath.string, flags: 0x00000001)
 
         let fileAttrs = try await fstatHandle(handle)
         let totalSize = fileAttrs.size
@@ -455,8 +455,8 @@ public actor SFTPClient {
             throw SFTPClientError.notConnected
         }
 
-        let absolutePath = resolvePath(remotePath)
-        let handle = try await openFile(path: absolutePath, flags: 0x00000001) // SSH_FXF_READ
+        let absolutePath = try resolvePath(remotePath)
+        let handle = try await openFile(path: absolutePath.string, flags: 0x00000001) // SSH_FXF_READ
 
         var result = Data()
         do {
@@ -698,18 +698,8 @@ public actor SFTPClient {
 
     // MARK: - Helpers
 
-    private func resolvePath(_ path: String) -> String {
-        if path.hasPrefix("/") { return path }
-        if path == "." { return currentPath }
-        if path == ".." {
-            if currentPath == "/" { return "/" }
-            return (currentPath as NSString).deletingLastPathComponent
-        }
-
-        if currentPath.hasSuffix("/") {
-            return currentPath + path
-        }
-        return currentPath + "/" + path
+    private func resolvePath(_ path: String) throws -> SFTPPath {
+        try currentPath.resolving(path)
     }
 
     private func formatPermissions(_ permissions: UInt32?) -> String {

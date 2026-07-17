@@ -379,6 +379,53 @@ struct SFTPProtocolTests {
     }
 }
 
+// MARK: - SFTPPath Unit Tests
+
+struct SFTPPathTests {
+
+    @Test
+    func testAbsoluteInputReplacesCurrent() throws {
+        let resolved = try SFTPPath.root.resolving("/home/user")
+        #expect(resolved.string == "/home/user")
+    }
+
+    @Test
+    func testEmptyOrDotStaysAtCurrent() throws {
+        let current = try SFTPPath.root.resolving("/var/log")
+        #expect(try current.resolving("").string == "/var/log")
+        #expect(try current.resolving(".").string == "/var/log")
+    }
+
+    @Test
+    func testDotDotGoesUpOneComponent() throws {
+        let current = try SFTPPath.root.resolving("/var/log")
+        #expect(try current.resolving("..").string == "/var")
+    }
+
+    @Test
+    func testDotDotAtRootStaysAtRoot() throws {
+        #expect(try SFTPPath.root.resolving("..").string == "/")
+    }
+
+    @Test
+    func testRelativeNameIsAppended() throws {
+        let current = try SFTPPath.root.resolving("/home/user")
+        #expect(try current.resolving("docs").string == "/home/user/docs")
+    }
+
+    @Test
+    func testRelativeNameAppendedToTrailingSlash() throws {
+        #expect(try SFTPPath.root.resolving("docs").string == "/docs")
+    }
+
+    @Test
+    func testEmbeddedNulByteIsRejected() {
+        #expect(throws: SFTPPathError.self) {
+            try SFTPPath.root.resolving("evil\0name")
+        }
+    }
+}
+
 // MARK: - RemoteFile Unit Tests
 
 struct RemoteFileTests {
