@@ -6,9 +6,14 @@
 //
 
 import SwiftUI
+import FTPClient
 
 @main
 struct FerriApp: App {
+    init() {
+        FerriLogging.bootstrap()
+    }
+
     var body: some Scene {
         WindowGroup {
             MainView()
