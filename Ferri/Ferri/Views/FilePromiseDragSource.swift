@@ -15,6 +15,33 @@ struct FilePromiseInfo {
     let remoteFile: RemoteFile
 }
 
+// MARK: - Aggregate byte count for a directory drag
+
+/// Folds the per-file download callbacks of one directory drag into the single `Progress`
+/// backing Finder's badge for the whole tree, by carrying the bytes of already-finished
+/// files across the recursion.
+@MainActor
+private final class TreeProgress {
+    private let progress: Progress
+    private var finishedBytes: Int64 = 0
+
+    init(progress: Progress) {
+        self.progress = progress
+    }
+
+    /// The in-flight file's running byte count, on top of everything already finished.
+    func update(currentFileBytes: Int64) {
+        progress.completedUnitCount = finishedBytes + currentFileBytes
+    }
+
+    /// Banks a finished file so the next one accumulates from here. Uses the listed size
+    /// rather than the last callback value, which may lag the final write.
+    func finish(fileBytes: Int64) {
+        finishedBytes += fileBytes
+        progress.completedUnitCount = finishedBytes
+    }
+}
+
 // MARK: - NSFilePromiseProvider bridge for dragging remote files to Finder
 
 /// An NSView that acts as a drag source for remote files and directories using
@@ -119,9 +146,9 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
             let progress = publishFinderProgress(for: file, destination: url)
             do {
                 if file.isDirectory {
-                    try await downloadDirectoryRecursively(remotePath: file.path, to: url)
+                    try await downloadDirectory(file, to: url, progress: progress)
                 } else {
-                    try await download(file, to: url, progress: progress)
+                    try await download(file, to: url) { progress.completedUnitCount = $0 }
                 }
                 progress.completedUnitCount = progress.totalUnitCount
                 progress.unpublish()
@@ -167,25 +194,49 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
 
     /// Downloads one file as a row in the transfer queue, so a drag to Finder shows the same
     /// progress, speed and pause/cancel controls as a download started from the app's own UI.
-    /// Falls back to an untracked download when no queue is attached. `progress`'s
-    /// `completedUnitCount` is kept in step with the running byte count.
-    private func download(_ file: RemoteFile, to localURL: URL, progress: Progress? = nil) async throws {
+    /// Falls back to an untracked download when no queue is attached. `onBytes` receives the
+    /// running byte count so the caller can drive Finder's badge.
+    private func download(_ file: RemoteFile, to localURL: URL, onBytes: ((Int64) -> Void)? = nil) async throws {
         guard let transferQueue else {
             try await ftpClient.downloadFile(named: file.path, to: localURL) { bytesTransferred, _ in
-                progress?.completedUnitCount = bytesTransferred
+                onBytes?(bytesTransferred)
             }
             return
         }
         try await transferQueue.downloadAndWait(file: file, to: localURL) { bytesTransferred in
-            progress?.completedUnitCount = bytesTransferred
+            onBytes?(bytesTransferred)
         }
     }
 
     // MARK: - Recursive directory download
 
+    /// Downloads a directory tree, driving Finder's badge from a byte total discovered by a
+    /// recursive listing that runs *alongside* the download rather than before it: the drop
+    /// isn't held up waiting on the listing, and the badge upgrades from indeterminate to a
+    /// real pie once the total lands. Sizing failure is deliberately non-fatal — it only
+    /// costs the badge its total, so it must not take the download down with it.
+    private func downloadDirectory(_ file: RemoteFile, to localURL: URL, progress: Progress) async throws {
+        let sizing = Task { @MainActor in
+            guard let files = try? await ftpClient.listDirectoryRecursively(at: file.path) else {
+                logger.debug("Sizing pass failed for \(file.path); badge stays indeterminate")
+                return
+            }
+            let total = files.reduce(Int64(0)) { $0 + $1.size }
+            logger.info("Sized \(file.path): \(files.count) files, \(total) bytes")
+            progress.totalUnitCount = total
+        }
+        defer { sizing.cancel() }
+
+        try await downloadDirectoryRecursively(
+            remotePath: file.path,
+            to: localURL,
+            tree: TreeProgress(progress: progress)
+        )
+    }
+
     /// Downloads an entire remote directory tree to a local URL, preserving structure.
     /// Each file is downloaded independently and streams to disk as bytes arrive.
-    private func downloadDirectoryRecursively(remotePath: String, to localURL: URL) async throws {
+    private func downloadDirectoryRecursively(remotePath: String, to localURL: URL, tree: TreeProgress?) async throws {
         logger.debug("Creating local directory: \(localURL.path)")
         try FileManager.default.createDirectory(at: localURL, withIntermediateDirectories: true)
 
@@ -195,12 +246,13 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         for entry in entries {
             let childURL = localURL.appendingPathComponent(entry.name)
             if entry.isDirectory {
-                try await downloadDirectoryRecursively(remotePath: entry.path, to: childURL)
+                try await downloadDirectoryRecursively(remotePath: entry.path, to: childURL, tree: tree)
             } else {
                 logger.debug("Downloading file: \(entry.path) -> \(childURL.path)")
                 // One queue row per file rather than one for the whole tree: the transfer
                 // rows are sized and driven per file, and a listing gives no total up front.
-                try await download(entry, to: childURL)
+                try await download(entry, to: childURL) { tree?.update(currentFileBytes: $0) }
+                tree?.finish(fileBytes: entry.size)
                 logger.debug("Downloaded: \(entry.name)")
             }
         }
