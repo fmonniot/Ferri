@@ -21,6 +21,10 @@ final class TransferQueueViewModel: ObservableObject {
     /// state. A pause isn't terminal, so a paused-then-resumed transfer keeps them waiting.
     private var completionWaiters: [UUID: [CheckedContinuation<Void, Error>]] = [:]
 
+    /// Optional per-transfer byte-progress callback for `downloadAndWait(file:to:progress:)`
+    /// callers (the Finder file-promise path) that need updates outside the published queue.
+    private var progressHandlers: [UUID: (Int64) -> Void] = [:]
+
     init(ftpClient: any FTPClientProtocol = FTPClient.shared) {
         self.ftpClient = ftpClient
     }
@@ -73,6 +77,7 @@ final class TransferQueueViewModel: ObservableObject {
         tasks[id]?.cancel()
         tasks[id] = nil
         stopReasons[id] = nil
+        progressHandlers[id] = nil
         transfers.removeAll { $0.id == id }
         resumeWaiters(id: id, with: CancellationError())
     }
@@ -134,8 +139,13 @@ final class TransferQueueViewModel: ObservableObject {
     /// This is the entry point for AppKit file promises (drag to Finder): the promise's
     /// completion handler has to report an outcome back to Finder, but the transfer still
     /// belongs in the queue, so the queue owns the download task and the caller just waits.
-    func downloadAndWait(file: RemoteFile, to localURL: URL) async throws {
+    /// `progress`, when supplied, is called with the running byte count so the caller can
+    /// mirror it onto Finder's own progress UI (e.g. an `NSProgress` for a file promise).
+    func downloadAndWait(file: RemoteFile, to localURL: URL, progress: ((Int64) -> Void)? = nil) async throws {
         let id = startDownload(file: file, to: localURL)
+        if let progress {
+            progressHandlers[id] = progress
+        }
         try await withCheckedThrowingContinuation { continuation in
             completionWaiters[id, default: []].append(continuation)
         }
@@ -192,6 +202,7 @@ final class TransferQueueViewModel: ObservableObject {
                         let delta = Double(bytesTransferred - baseBytes)
                         let speed = (elapsed > 0 && delta > 0) ? delta / elapsed : nil
                         self.updateTransfer(id: id, bytesTransferred: bytesTransferred, bytesPerSecond: speed)
+                        self.progressHandlers[id]?(bytesTransferred)
                     }
                 }
                 self.finishDownload(id: id, status: .completed, error: nil)
@@ -207,6 +218,11 @@ final class TransferQueueViewModel: ObservableObject {
     private func finishDownload(id: UUID, status: TransferStatus, error: Error?) {
         tasks[id] = nil
         stopReasons[id] = nil
+        if status != .paused {
+            // Paused rows may resume into a fresh `runDownload` under the same id; anything
+            // terminal should stop mirroring progress onto a (by then unpublished) NSProgress.
+            progressHandlers[id] = nil
+        }
         // No-ops if the row was already removed.
         updateTransfer(id: id, status: status, errorMessage: (status == .failed) ? error?.localizedDescription : nil)
 

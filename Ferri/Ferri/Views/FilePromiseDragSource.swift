@@ -110,18 +110,25 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         }
 
         let file = info.remoteFile
-        logger.info("Fulfilling promise for \(file.isDirectory ? "directory" : "file"): \(file.path) -> \(url.path)")
+        logger.info("Fulfilling promise for \(file.isDirectory ? "directory" : "file"): \(file.path) (\(file.size) bytes) -> \(url.path)")
 
-        Task {
+        // AppKit calls this on `filePromiseQueue`, but the progress is published and driven on
+        // the main thread: publishing hands the object to other processes over the main
+        // run loop, and the byte updates arrive on the main actor from the transfer queue.
+        Task { @MainActor in
+            let progress = publishFinderProgress(for: file, destination: url)
             do {
                 if file.isDirectory {
                     try await downloadDirectoryRecursively(remotePath: file.path, to: url)
                 } else {
-                    try await download(file, to: url)
+                    try await download(file, to: url, progress: progress)
                 }
+                progress.completedUnitCount = progress.totalUnitCount
+                progress.unpublish()
                 logger.info("Promise fulfilled successfully: \(file.name)")
                 completionHandler(nil)
             } catch {
+                progress.unpublish()
                 logger.error("Promise failed for \(file.name): \(error)")
                 completionHandler(error)
             }
@@ -130,15 +137,48 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
 
     // MARK: - Download
 
+    /// Creates the destination and publishes the `NSProgress` that drives Finder's download
+    /// badge on it. The caller owns the matching `unpublish()`.
+    ///
+    /// The destination is created *before* publishing on purpose: Finder attaches a published
+    /// progress to a file it can already see, and it doesn't retry once the file shows up
+    /// later. Publishing first left the drop looking like a plain, badge-less file for the
+    /// whole download. The empty placeholder is harmless — a fresh `downloadToFile` calls
+    /// `createFile` over it, and the resume path only ever runs against a partial file.
+    private func publishFinderProgress(for file: RemoteFile, destination url: URL) -> Progress {
+        if file.isDirectory {
+            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        } else {
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+        }
+
+        // A directory's total byte count isn't known up front (that would need a recursive
+        // listing pass before the first byte lands), so `totalUnitCount` stays 0 —
+        // indeterminate — rather than a fake number that would never reach completion.
+        let progress = Progress(totalUnitCount: file.isDirectory ? 0 : file.size)
+        progress.kind = .file
+        progress.fileOperationKind = .downloading
+        progress.fileURL = url
+        progress.isPausable = false
+        progress.isCancellable = false
+        progress.publish()
+        return progress
+    }
+
     /// Downloads one file as a row in the transfer queue, so a drag to Finder shows the same
     /// progress, speed and pause/cancel controls as a download started from the app's own UI.
-    /// Falls back to an untracked download when no queue is attached.
-    private func download(_ file: RemoteFile, to localURL: URL) async throws {
+    /// Falls back to an untracked download when no queue is attached. `progress`'s
+    /// `completedUnitCount` is kept in step with the running byte count.
+    private func download(_ file: RemoteFile, to localURL: URL, progress: Progress? = nil) async throws {
         guard let transferQueue else {
-            try await ftpClient.downloadFile(named: file.path, to: localURL)
+            try await ftpClient.downloadFile(named: file.path, to: localURL) { bytesTransferred, _ in
+                progress?.completedUnitCount = bytesTransferred
+            }
             return
         }
-        try await transferQueue.downloadAndWait(file: file, to: localURL)
+        try await transferQueue.downloadAndWait(file: file, to: localURL) { bytesTransferred in
+            progress?.completedUnitCount = bytesTransferred
+        }
     }
 
     // MARK: - Recursive directory download
