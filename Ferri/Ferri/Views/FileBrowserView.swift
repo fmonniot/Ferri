@@ -12,6 +12,9 @@ struct FileBrowserView: View {
     @State private var sortComparators: [KeyPathComparator<RemoteFile>] = [
         KeyPathComparator(\.name, order: .forward)
     ]
+    /// Persists per-column widths and show/hide state to UserDefaults automatically; the
+    /// show/hide and reorder UI is the native right-click-on-header menu Table provides for free.
+    @AppStorage("FileBrowserView.columnCustomization") private var columnCustomization: TableColumnCustomization<RemoteFile>
 
     var body: some View {
         VStack(spacing: 0) {
@@ -216,8 +219,14 @@ struct FileBrowserView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Uses the `of:columns:rows:` Table form with a per-row `.contextMenu` for the Download/Get
+    /// Info/Copy Path menu, rather than `.contextMenu(forSelectionType:menu:primaryAction:)`'s
+    /// `menu:` closure - the latter swallows secondary clicks on the column headers too, which
+    /// blocks the native header menu that shows/hides columns via `columnCustomization`. The
+    /// table-level modifier is kept only for its `primaryAction:` (double-click/Return to open a
+    /// folder), which doesn't have that conflict since it's not a secondary-click affordance.
     private var fileTableView: some View {
-        Table(filesTableItems, selection: $selectedFiles, sortOrder: $sortComparators) {
+        Table(of: RemoteFile.self, selection: $selectedFiles, sortOrder: $sortComparators, columnCustomization: $columnCustomization) {
             TableColumn("Name", value: \.name) { file in
                 rowCell(isSelected: selectedFiles.contains(file.id)) {
                     HStack(spacing: 8) {
@@ -231,6 +240,8 @@ struct FileBrowserView: View {
                 }
             }
             .width(min: 200, ideal: 300)
+            .customizationID("name")
+            .disabledCustomizationBehavior(.visibility)
 
             TableColumn("Size", value: \.size) { file in
                 rowCell(isSelected: selectedFiles.contains(file.id), unselectedColor: .secondary) {
@@ -238,14 +249,16 @@ struct FileBrowserView: View {
                         .monospacedDigit()
                 }
             }
-            .width(80)
+            .width(min: 50, ideal: 80, max: 150)
+            .customizationID("size")
 
             TableColumn("Date Modified", value: \.sortDate) { file in
                 rowCell(isSelected: selectedFiles.contains(file.id), unselectedColor: .secondary) {
                     Text(file.formattedDate)
                 }
             }
-            .width(150)
+            .width(min: 100, ideal: 150, max: 260)
+            .customizationID("date")
 
             TableColumn("Permissions", value: \.permissions) { file in
                 rowCell(isSelected: selectedFiles.contains(file.id), unselectedColor: .secondary) {
@@ -253,27 +266,36 @@ struct FileBrowserView: View {
                         .font(.system(.body, design: .monospaced))
                 }
             }
-            .width(100)
+            .width(min: 70, ideal: 100, max: 160)
+            .customizationID("permissions")
+        } rows: {
+            ForEach(filesTableItems) { file in
+                TableRow(file)
+                    .contextMenu {
+                        if !file.isDirectory {
+                            Button("Download") {
+                                downloadFile(file)
+                            }
+                        }
+                        Button("Get Info") {
+                            infoFile = file
+                        }
+                        Divider()
+                        Button("Copy Path") {
+                            copyPath(file)
+                        }
+                    }
+            }
         }
         .onChange(of: sortComparators) { _, comparators in
             applySort(comparators)
         }
-        .contextMenu(forSelectionType: RemoteFile.ID.self) { items in
-            if let fileId = items.first,
-               let file = viewModel.files.first(where: { $0.id == fileId }) {
-                if !file.isDirectory {
-                    Button("Download") {
-                        downloadFile(file)
-                    }
-                }
-                Button("Get Info") {
-                    infoFile = file
-                }
-                Divider()
-                Button("Copy Path") {
-                    copyPath(file)
-                }
-            }
+        // Empty `menu:` closure so this only supplies double-click/Return-to-open via
+        // `primaryAction:` (native NSTableView doubleAction) - the row's own `.contextMenu`
+        // above supplies the actual right-click menu, since attaching real content here
+        // was found to swallow secondary clicks on the column headers too, blocking the
+        // native header menu that shows/hides columns via `columnCustomization`.
+        .contextMenu(forSelectionType: RemoteFile.ID.self) { _ in
         } primaryAction: { items in
             if let fileId = items.first,
                let file = viewModel.files.first(where: { $0.id == fileId }),
