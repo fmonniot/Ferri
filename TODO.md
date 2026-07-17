@@ -4,7 +4,6 @@ Open issues, written to be actionable by a future session without extra context-
 
 ## FTPClient package
 
-- **Revisit `SFTPClient.isConnectedFlag`'s `nonisolated(unsafe)` read.** It was previously made properly synchronized but reverted because the test suite needed the synchronous unsafe read — see git history around `SFTPClient.swift` for that revert. Reads of `isConnected` from outside the actor aren't ordering-guaranteed against actor-isolated writes. Revisit with either an atomic (`swift-atomics`) or by making the tests tolerate an `async` `isConnected` property, rather than leaving the unsafe read in place indefinitely.
 - **Use a stronger type than `String` for remote paths** (low priority). Plain `String` throughout lets invalid/empty paths pass silently. A lightweight `SFTPPath` wrapper, or at minimum validation in `resolvePath`, would catch malformed input earlier.
 
 ## Ferri app

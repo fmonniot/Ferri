@@ -641,13 +641,13 @@ struct SFTPIntegrationTests {
             let client = SFTPClient()
             try await self.connectClient(client)
 
-            #expect(client.isConnected == true)
+            #expect(await client.isConnected == true)
 
             let files = try await client.listDirectory(path: ".")
             #expect(!files.isEmpty)
 
             try await client.disconnect()
-            #expect(client.isConnected == false)
+            #expect(await client.isConnected == false)
         }
     }
 
@@ -660,7 +660,7 @@ struct SFTPIntegrationTests {
 
         let files = try await client.listDirectory(path: "/")
 
-        #expect(client.isConnected == true)
+        #expect(await client.isConnected == true)
         #expect(files.count > 0)
 
         let hasUploadDir = files.contains { $0.name == "upload" }

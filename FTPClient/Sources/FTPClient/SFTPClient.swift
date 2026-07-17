@@ -50,9 +50,7 @@ public actor SFTPClient {
     private var sshChannel: Channel?
     private var sftpChannel: Channel?
 
-    // nonisolated(unsafe) so it can be read from the nonisolated `isConnected` property
-    // and written from actor-isolated methods without Swift 6 isolation errors.
-    nonisolated(unsafe) private var isConnectedFlag = false
+    private var isConnectedFlag = false
 
     // SFTPProtocol is a pure encoder/decoder with no mutable state, so it's genuinely
     // Sendable and can be handed to the non-actor SFTPChannelHandler without unsafe opt-outs.
@@ -84,7 +82,7 @@ public actor SFTPClient {
         }
     }
 
-    public nonisolated var isConnected: Bool {
+    public var isConnected: Bool {
         isConnectedFlag
     }
 
