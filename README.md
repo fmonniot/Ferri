@@ -75,3 +75,7 @@ Ferri logs through macOS unified logging (subsystem `eu.monniot.Ferri`), so logs
 log show --predicate 'subsystem == "eu.monniot.Ferri"' --last 1h
 log stream --predicate 'subsystem == "eu.monniot.Ferri"'
 ```
+
+## License
+
+Ferri is available under the [MIT license](LICENSE).
