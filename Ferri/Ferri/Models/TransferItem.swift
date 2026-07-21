@@ -61,18 +61,27 @@ struct TransferItem: Identifiable, Codable {
     }
     
     var formattedProgress: String {
-        let transferred = ByteCountFormatter.string(fromByteCount: bytesTransferred, countStyle: .file)
-        let total = ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
+        let transferred = Self.byteFormatter.string(fromByteCount: bytesTransferred)
+        let total = Self.byteFormatter.string(fromByteCount: fileSize)
         return "\(transferred) / \(total)"
     }
-    
+
     var directionIcon: String {
         direction == .upload ? "arrow.up.circle" : "arrow.down.circle"
     }
 
     var formattedSpeed: String? {
         guard let bytesPerSecond, bytesPerSecond > 0 else { return nil }
-        let formatted = ByteCountFormatter.string(fromByteCount: Int64(bytesPerSecond), countStyle: .file)
+        let formatted = Self.byteFormatter.string(fromByteCount: Int64(bytesPerSecond))
         return "\(formatted)/s"
     }
+
+    /// `zeroPadsFractionDigits` keeps a consistent decimal-digit count (e.g. "500.0 MB" instead
+    /// of "500 MB") so the text doesn't shrink and shift whenever a value rounds to a whole number.
+    private static let byteFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.zeroPadsFractionDigits = true
+        return formatter
+    }()
 }

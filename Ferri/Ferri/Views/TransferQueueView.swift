@@ -130,12 +130,16 @@ struct TransferRow: View {
 
                     HStack(spacing: 4) {
                         Text(transfer.formattedProgress)
+                            .monospacedDigit()
+                            .frame(minWidth: 108, alignment: .leading)
                         if transfer.status == .paused {
                             Text("· Paused")
                                 .foregroundColor(.orange)
                         } else if let speed = transfer.formattedSpeed {
                             Text("·")
                             Text(speed)
+                                .monospacedDigit()
+                                .frame(minWidth: 64, alignment: .leading)
                         }
                     }
                     .font(.caption)
@@ -235,14 +239,19 @@ struct TransferGroupRow: View {
 
                         HStack(spacing: 4) {
                             Text(summary.formattedProgress)
+                                .monospacedDigit()
+                                .frame(minWidth: 108, alignment: .leading)
                             Text("·")
                             Text(summary.filesSummary)
+                                .monospacedDigit()
                             if summary.status == .paused {
                                 Text("· Paused")
                                     .foregroundColor(.orange)
                             } else if let speed = summary.formattedSpeed {
                                 Text("·")
                                 Text(speed)
+                                    .monospacedDigit()
+                                    .frame(minWidth: 64, alignment: .leading)
                             }
                         }
                         .font(.caption)

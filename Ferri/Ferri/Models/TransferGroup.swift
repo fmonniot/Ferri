@@ -56,21 +56,30 @@ struct TransferGroupSummary: Identifiable {
     }
 
     var formattedProgress: String {
-        let transferred = ByteCountFormatter.string(fromByteCount: bytesTransferred, countStyle: .file)
+        let transferred = Self.byteFormatter.string(fromByteCount: bytesTransferred)
         guard let totalBytes else { return transferred }
-        let total = ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+        let total = Self.byteFormatter.string(fromByteCount: totalBytes)
         return "\(transferred) / \(total)"
     }
 
     var formattedSpeed: String? {
         guard let bytesPerSecond, bytesPerSecond > 0 else { return nil }
-        let formatted = ByteCountFormatter.string(fromByteCount: Int64(bytesPerSecond), countStyle: .file)
+        let formatted = Self.byteFormatter.string(fromByteCount: Int64(bytesPerSecond))
         return "\(formatted)/s"
     }
 
     var filesSummary: String {
         "\(filesCompleted)/\(filesTotal) files"
     }
+
+    /// `zeroPadsFractionDigits` keeps a consistent decimal-digit count (e.g. "500.0 MB" instead
+    /// of "500 MB") so the text doesn't shrink and shift whenever a value rounds to a whole number.
+    private static let byteFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.zeroPadsFractionDigits = true
+        return formatter
+    }()
 }
 
 /// One row of the transfer queue as displayed: either a standalone file transfer, or the
