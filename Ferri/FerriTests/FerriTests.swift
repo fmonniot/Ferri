@@ -28,8 +28,26 @@ final class MockFTPClient: FTPClientProtocol, @unchecked Sendable {
 
     // MARK: Call tracking
 
-    private(set) var downloadCalls: [(fileName: String, localURL: URL, resumeOffset: Int64)] = []
-    private(set) var listDirectoryCalls: [String] = []
+    /// The real `SFTPClient` is an `actor`, so a directory download's sizing pass running
+    /// concurrently alongside the actual download (see `FilePromiseDragSourceView.downloadDirectory`
+    /// / `FileBrowserViewModel.downloadDirectoryIntoGroup`) never races in production. This mock
+    /// is a plain class, though, so those two concurrent call chains both appending to the same
+    /// tracking array is a genuine, unsynchronized data race — guard the ones exercised that way.
+    private let callTrackingLock = NSLock()
+    private var _downloadCalls: [(fileName: String, localURL: URL, resumeOffset: Int64)] = []
+    private var _listDirectoryCalls: [String] = []
+
+    var downloadCalls: [(fileName: String, localURL: URL, resumeOffset: Int64)] {
+        callTrackingLock.lock()
+        defer { callTrackingLock.unlock() }
+        return _downloadCalls
+    }
+    var listDirectoryCalls: [String] {
+        callTrackingLock.lock()
+        defer { callTrackingLock.unlock() }
+        return _listDirectoryCalls
+    }
+
     private(set) var connectCalls: [FTPServer] = []
     private(set) var disconnectCallCount = 0
     private(set) var changeDirectoryCalls: [String] = []
@@ -50,7 +68,9 @@ final class MockFTPClient: FTPClientProtocol, @unchecked Sendable {
     }
 
     func listDirectory(at path: String) async throws -> [RemoteFile] {
-        listDirectoryCalls.append(path)
+        callTrackingLock.lock()
+        _listDirectoryCalls.append(path)
+        callTrackingLock.unlock()
         if shouldFailListDirectory { throw listDirectoryError }
         if let files = mockFilesByPath[path] { return files }
         return mockFiles
@@ -80,7 +100,9 @@ final class MockFTPClient: FTPClientProtocol, @unchecked Sendable {
     }
 
     func downloadFile(named fileName: String, to localURL: URL, resumeOffset: Int64, progress: (@Sendable (Int64, Int64?) -> Void)?) async throws {
-        downloadCalls.append((fileName, localURL, resumeOffset))
+        callTrackingLock.lock()
+        _downloadCalls.append((fileName, localURL, resumeOffset))
+        callTrackingLock.unlock()
         if shouldFailDownload { throw downloadError }
 
         if simulateSlowDownload {
@@ -782,6 +804,108 @@ struct FileBrowserViewModelTests {
 
         // canGoUp is false when currentPath == "/", so loadDirectory should not be called
         #expect(mock.listDirectoryCalls.isEmpty)
+    }
+
+    // MARK: Multi-item download
+
+    private func groupSummary(_ queue: TransferQueueViewModel, id: UUID) -> TransferGroupSummary? {
+        for row in queue.rows {
+            if case .group(let summary) = row, summary.id == id { return summary }
+        }
+        return nil
+    }
+
+    private func waitUntil(timeoutMs: Int = 2000, _ condition: () -> Bool) async {
+        let deadline = Date().addingTimeInterval(Double(timeoutMs) / 1000)
+        while !condition() && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 5_000_000) // 5ms
+        }
+    }
+
+    @Test
+    func downloadFilesGroupsMultiplePlainFiles() async throws {
+        let mock = MockFTPClient()
+        let vm = FileBrowserViewModel(ftpClient: mock)
+        let queue = TransferQueueViewModel(ftpClient: mock)
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("multi_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let files = [
+            RemoteFile(name: "a.txt", path: "/home/a.txt", isDirectory: false, size: 100),
+            RemoteFile(name: "b.txt", path: "/home/b.txt", isDirectory: false, size: 200),
+        ]
+        vm.downloadFiles(files, to: tempDir, transferQueue: queue)
+
+        // `startGroup` registers the group synchronously, so its id is available immediately —
+        // unlike `rows`, which only shows a group once it has at least one transfer item, and
+        // for plain files (unlike directories) that happens synchronously too.
+        let groupID = try #require(queue.groups.keys.first)
+        #expect(queue.rows.count == 1)
+
+        let initial = try #require(groupSummary(queue, id: groupID))
+        #expect(initial.filesTotal == 2)
+        #expect(initial.totalBytes == 300)
+
+        await waitUntil { groupSummary(queue, id: groupID)?.status == .completed }
+        #expect(groupSummary(queue, id: groupID)?.filesCompleted == 2)
+    }
+
+    @Test
+    func downloadFilesGroupsSingleDirectory() async throws {
+        let mock = MockFTPClient()
+        mock.mockFilesByPath["/home/docs"] = [
+            RemoteFile(name: "readme.md", path: "/home/docs/readme.md", isDirectory: false, size: 500),
+            RemoteFile(name: "notes.txt", path: "/home/docs/notes.txt", isDirectory: false, size: 300),
+        ]
+        let vm = FileBrowserViewModel(ftpClient: mock)
+        let queue = TransferQueueViewModel(ftpClient: mock)
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("dir_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let docs = RemoteFile(name: "docs", path: "/home/docs", isDirectory: true, size: 4096)
+        vm.downloadFiles([docs], to: tempDir, transferQueue: queue)
+
+        // A directory-only download adds nothing to `transfers` synchronously (the recursive
+        // walk runs in a spawned Task that hasn't executed yet), so `rows` is still empty here
+        // — only the group itself, registered synchronously by `startGroup`, is available.
+        let groupID = try #require(queue.groups.keys.first)
+
+        // The directory's own listed size (4096) is never used — its total comes from the
+        // recursive sizing pass over its actual contents once that finishes.
+        await waitUntil { groupSummary(queue, id: groupID)?.totalBytes == 800 }
+        #expect(groupSummary(queue, id: groupID)?.filesTotal == 2)
+
+        await waitUntil { groupSummary(queue, id: groupID)?.status == .completed }
+    }
+
+    @Test
+    func downloadFilesMixedFilesAndDirectoryAccumulatesTotal() async throws {
+        let mock = MockFTPClient()
+        mock.mockFilesByPath["/home/docs"] = [
+            RemoteFile(name: "readme.md", path: "/home/docs/readme.md", isDirectory: false, size: 500),
+        ]
+        let vm = FileBrowserViewModel(ftpClient: mock)
+        let queue = TransferQueueViewModel(ftpClient: mock)
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("mixed_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let plainFile = RemoteFile(name: "a.txt", path: "/home/a.txt", isDirectory: false, size: 100)
+        let docs = RemoteFile(name: "docs", path: "/home/docs", isDirectory: true, size: 4096)
+        vm.downloadFiles([plainFile, docs], to: tempDir, transferQueue: queue)
+
+        let groupID = try #require(queue.groups.keys.first)
+        #expect(queue.rows.count == 1)
+
+        // The plain file's known size (100) lands immediately; the directory's (500) only
+        // arrives once its sizing pass finishes, so the total grows from 100 to 600.
+        #expect(groupSummary(queue, id: groupID)?.totalBytes == 100)
+        await waitUntil { groupSummary(queue, id: groupID)?.totalBytes == 600 }
+        #expect(groupSummary(queue, id: groupID)?.totalBytes == 600)
+
+        await waitUntil { groupSummary(queue, id: groupID)?.filesCompleted == 2 }
     }
 }
 

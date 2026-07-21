@@ -148,7 +148,9 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
                 if file.isDirectory {
                     try await downloadDirectory(file, to: url, progress: progress)
                 } else {
-                    try await download(file, to: url) { progress.completedUnitCount = $0 }
+                    try await RemoteDownloader.downloadFile(file, to: url, ftpClient: ftpClient, transferQueue: transferQueue) {
+                        progress.completedUnitCount = $0
+                    }
                 }
                 progress.completedUnitCount = progress.totalUnitCount
                 progress.unpublish()
@@ -192,23 +194,6 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         return progress
     }
 
-    /// Downloads one file as a row in the transfer queue, so a drag to Finder shows the same
-    /// progress, speed and pause/cancel controls as a download started from the app's own UI.
-    /// Falls back to an untracked download when no queue is attached. `onBytes` receives the
-    /// running byte count so the caller can drive Finder's badge. `groupID` rolls this file
-    /// into a directory drag's aggregate transfer row instead of listing it on its own.
-    private func download(_ file: RemoteFile, to localURL: URL, groupID: UUID? = nil, onBytes: ((Int64) -> Void)? = nil) async throws {
-        guard let transferQueue else {
-            try await ftpClient.downloadFile(named: file.path, to: localURL) { bytesTransferred, _ in
-                onBytes?(bytesTransferred)
-            }
-            return
-        }
-        try await transferQueue.downloadAndWait(file: file, to: localURL, groupID: groupID) { bytesTransferred in
-            onBytes?(bytesTransferred)
-        }
-    }
-
     // MARK: - Recursive directory download
 
     /// Downloads a directory tree, driving Finder's badge from a byte total discovered by a
@@ -232,44 +217,26 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
             logger.info("Sized \(file.path): \(files.count) files, \(total) bytes")
             progress.totalUnitCount = total
             if let groupID {
-                transferQueue?.updateGroupTotalBytes(id: groupID, totalBytes: total)
+                transferQueue?.addToGroupTotalBytes(id: groupID, bytes: total)
             }
         }
         defer { sizing.cancel() }
 
-        try await downloadDirectoryRecursively(
+        let tree = TreeProgress(progress: progress)
+        try await RemoteDownloader.downloadTree(
             remotePath: file.path,
             to: localURL,
-            tree: TreeProgress(progress: progress),
-            groupID: groupID
+            groupID: groupID,
+            ftpClient: ftpClient,
+            transferQueue: transferQueue,
+            onFileBytes: { tree.update(currentFileBytes: $0) },
+            onFileFinished: { tree.finish(fileBytes: $0.size) }
         )
 
         // An empty directory never downloads a file to hang the group row's aggregate off of;
         // drop it rather than leaving an invisible, un-removable entry in the queue's bookkeeping.
         if let groupID {
             transferQueue?.removeGroupIfEmpty(id: groupID)
-        }
-    }
-
-    /// Downloads an entire remote directory tree to a local URL, preserving structure.
-    /// Each file is downloaded independently and streams to disk as bytes arrive.
-    private func downloadDirectoryRecursively(remotePath: String, to localURL: URL, tree: TreeProgress?, groupID: UUID?) async throws {
-        logger.debug("Creating local directory: \(localURL.path)")
-        try FileManager.default.createDirectory(at: localURL, withIntermediateDirectories: true)
-
-        let entries = try await ftpClient.listDirectory(at: remotePath)
-        logger.info("Listed \(entries.count) entries in \(remotePath)")
-
-        for entry in entries {
-            let childURL = localURL.appendingPathComponent(entry.name)
-            if entry.isDirectory {
-                try await downloadDirectoryRecursively(remotePath: entry.path, to: childURL, tree: tree, groupID: groupID)
-            } else {
-                logger.debug("Downloading file: \(entry.path) -> \(childURL.path)")
-                try await download(entry, to: childURL, groupID: groupID) { tree?.update(currentFileBytes: $0) }
-                tree?.finish(fileBytes: entry.size)
-                logger.debug("Downloaded: \(entry.name)")
-            }
         }
     }
 

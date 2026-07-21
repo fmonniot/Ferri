@@ -182,4 +182,54 @@ final class FileBrowserViewModel: ObservableObject {
         // so it can interrupt and resume the underlying SFTP stream.
         transferQueue.startDownload(file: file, to: localURL)
     }
+
+    /// Downloads every item in `files` into `destinationDir`, each keeping its remote name. A
+    /// lone plain file is exempted from this (see `FileBrowserView.downloadSelection`, which
+    /// routes that case through `downloadFile` with a user-chosen destination file instead) —
+    /// everything else (multiple items, or any directory) rolls up under one aggregate
+    /// `TransferGroup` row instead of flooding the queue with one row per file.
+    func downloadFiles(_ files: [RemoteFile], to destinationDir: URL, transferQueue: TransferQueueViewModel) {
+        guard !files.isEmpty else { return }
+
+        let groupName = files.count == 1 ? files[0].name : "\(files.count) items"
+        let groupID = transferQueue.startGroup(name: groupName)
+
+        // Plain files' sizes are already known from the directory listing; a selected
+        // directory's own size only lands once its sizing pass (in `downloadDirectoryIntoGroup`)
+        // finishes, so the group's total starts from just what's known now.
+        let knownBytes = files.filter { !$0.isDirectory }.reduce(Int64(0)) { $0 + $1.size }
+        if knownBytes > 0 {
+            transferQueue.addToGroupTotalBytes(id: groupID, bytes: knownBytes)
+        }
+
+        for file in files {
+            let destinationURL = destinationDir.appendingPathComponent(file.name)
+            if file.isDirectory {
+                downloadDirectoryIntoGroup(file, to: destinationURL, groupID: groupID, transferQueue: transferQueue)
+            } else {
+                transferQueue.startDownload(file: file, to: destinationURL, groupID: groupID)
+            }
+        }
+    }
+
+    /// Sizes and recursively downloads one directory selected alongside other items, adding its
+    /// total to the shared group once known. Mirrors `FilePromiseDragSourceView.downloadDirectory`'s
+    /// concurrent sizing pass, minus the Finder-badge plumbing that path needs and this one doesn't.
+    private func downloadDirectoryIntoGroup(_ file: RemoteFile, to localURL: URL, groupID: UUID, transferQueue: TransferQueueViewModel) {
+        let ftpClient = self.ftpClient
+        Task { @MainActor in
+            let sizing = Task { @MainActor in
+                guard let sized = try? await ftpClient.listDirectoryRecursively(at: file.path) else { return }
+                let total = sized.reduce(Int64(0)) { $0 + $1.size }
+                transferQueue.addToGroupTotalBytes(id: groupID, bytes: total)
+            }
+            defer { sizing.cancel() }
+
+            try? await RemoteDownloader.downloadTree(remotePath: file.path, to: localURL, groupID: groupID, ftpClient: ftpClient, transferQueue: transferQueue)
+
+            // An empty directory never downloads a file to hang the group's aggregate off of;
+            // harmless no-op otherwise since other items in the group are still present.
+            transferQueue.removeGroupIfEmpty(id: groupID)
+        }
+    }
 }

@@ -272,17 +272,18 @@ struct FileBrowserView: View {
             ForEach(filesTableItems) { file in
                 TableRow(file)
                     .contextMenu {
-                        if !file.isDirectory {
-                            Button("Download") {
-                                downloadFile(file)
+                        let selection = effectiveSelection(for: file)
+                        Button(selection.count > 1 ? "Download \(selection.count) Items" : "Download") {
+                            downloadSelection(selection)
+                        }
+                        if selection.count == 1 {
+                            Button("Get Info") {
+                                infoFile = file
                             }
-                        }
-                        Button("Get Info") {
-                            infoFile = file
-                        }
-                        Divider()
-                        Button("Copy Path") {
-                            copyPath(file)
+                            Divider()
+                            Button("Copy Path") {
+                                copyPath(file)
+                            }
                         }
                     }
             }
@@ -341,12 +342,41 @@ struct FileBrowserView: View {
         viewModel.files
     }
 
-    private func downloadFile(_ file: RemoteFile) {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = file.name
+    /// The right-clicked row's siblings to act on: the whole current selection when the row is
+    /// part of a multi-item selection, or just that one row otherwise — the standard Finder
+    /// convention for right-clicking within vs. outside a selection.
+    private func effectiveSelection(for file: RemoteFile) -> [RemoteFile] {
+        guard selectedFiles.contains(file.id), selectedFiles.count > 1 else { return [file] }
+        return viewModel.files.filter { selectedFiles.contains($0.id) }
+    }
 
-        if panel.runModal() == .OK, let url = panel.url {
-            viewModel.downloadFile(file, to: url, transferQueue: transferQueue)
+    /// A lone plain file keeps the existing NSSavePanel flow (choose the exact destination file,
+    /// optionally renaming it). Anything else — multiple items, or a single directory — needs a
+    /// destination *folder* instead, since every item keeps its remote name.
+    private func downloadSelection(_ files: [RemoteFile]) {
+        guard !files.isEmpty else { return }
+
+        if files.count == 1, let file = files.first, !file.isDirectory {
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = file.name
+            if panel.runModal() == .OK, let url = panel.url {
+                viewModel.downloadFile(file, to: url, transferQueue: transferQueue)
+            }
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Download"
+        panel.message = files.count == 1
+            ? "Choose where to download “\(files[0].name)”"
+            : "Choose where to download \(files.count) items"
+
+        if panel.runModal() == .OK, let destinationDir = panel.url {
+            viewModel.downloadFiles(files, to: destinationDir, transferQueue: transferQueue)
         }
     }
 

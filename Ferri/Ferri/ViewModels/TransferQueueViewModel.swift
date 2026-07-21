@@ -103,10 +103,14 @@ final class TransferQueueViewModel: ObservableObject {
         return group.id
     }
 
-    /// Called once the recursive sizing pass for a directory drag reports a tree total, so the
-    /// aggregate progress bar can switch from indeterminate to a real fraction.
-    func updateGroupTotalBytes(id: UUID, totalBytes: Int64) {
-        groups[id]?.totalBytes = totalBytes
+    /// Adds to a group's known byte total — called once a source of bytes becomes known: the
+    /// sizes of any plain files in a multi-item download are known up front, while each
+    /// directory's total only lands once its own recursive sizing pass finishes. Additive
+    /// (rather than a plain setter) so multiple such sources can each contribute independently
+    /// without racing each other; the aggregate progress bar stays indeterminate until the
+    /// first contribution arrives.
+    func addToGroupTotalBytes(id: UUID, bytes: Int64) {
+        groups[id]?.totalBytes = (groups[id]?.totalBytes ?? 0) + bytes
     }
 
     /// Drops a group that ended up with no files (e.g. an empty directory was dragged) — it
