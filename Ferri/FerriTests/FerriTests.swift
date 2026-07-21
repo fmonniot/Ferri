@@ -1046,6 +1046,13 @@ struct FileBrowserViewModelTests {
         // The directory's own listed size (4096) is never used — its total comes from the
         // recursive sizing pass over its actual contents once that finishes.
         await waitUntil { groupSummary(queue, id: groupID)?.totalBytes == 800 }
+
+        // The sizing pass (which drives `totalBytes`) and the sequential tree walk (which adds
+        // one `TransferItem` per file as its download starts, driving `filesTotal`) run
+        // concurrently and finish independently — `totalBytes` reaching 800 says nothing about
+        // how many files the walk has gotten to yet, so wait for `filesTotal` on its own too
+        // instead of reading it immediately after the totalBytes wait above.
+        await waitUntil { groupSummary(queue, id: groupID)?.filesTotal == 2 }
         #expect(groupSummary(queue, id: groupID)?.filesTotal == 2)
 
         await waitUntil { groupSummary(queue, id: groupID)?.status == .completed }
