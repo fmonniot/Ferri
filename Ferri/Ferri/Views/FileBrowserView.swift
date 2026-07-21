@@ -236,7 +236,7 @@ struct FileBrowserView: View {
                     }
                 }
                 .overlay {
-                    FilePromiseDragSource(file: file, transferQueue: transferQueue)
+                    FilePromiseDragSource(file: file, selectedFiles: selectedRemoteFiles, transferQueue: transferQueue)
                 }
             }
             .width(min: 200, ideal: 300)
@@ -348,6 +348,14 @@ struct FileBrowserView: View {
     private func effectiveSelection(for file: RemoteFile) -> [RemoteFile] {
         guard selectedFiles.contains(file.id), selectedFiles.count > 1 else { return [file] }
         return viewModel.files.filter { selectedFiles.contains($0.id) }
+    }
+
+    /// The current selection resolved to `RemoteFile`s, handed to each row's drag source so a drag
+    /// begun on a selected row promises every selected item (the drag equivalent of the context
+    /// menu's "Download N Items"). The drag source itself decides whether the grabbed row is
+    /// actually part of this selection.
+    private var selectedRemoteFiles: [RemoteFile] {
+        viewModel.files.filter { selectedFiles.contains($0.id) }
     }
 
     /// A lone plain file keeps the existing NSSavePanel flow (choose the exact destination file,

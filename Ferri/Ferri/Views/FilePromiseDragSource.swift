@@ -50,6 +50,13 @@ private final class TreeProgress {
 class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProviderDelegate {
 
     var remoteFile: RemoteFile?
+
+    /// The full current table selection, resolved to `RemoteFile`s. When the grabbed row is part
+    /// of a multi-item selection, the drag promises every selected item rather than just the one
+    /// under the cursor — the drag equivalent of the context menu's "Download N Items". Empty (or
+    /// not containing `remoteFile`) means a plain single-item drag.
+    var selectedFiles: [RemoteFile] = []
+
     var ftpClient: any FTPClientProtocol = FTPClient.shared
 
     /// The queue that owns and displays the downloads this drag kicks off. Without it the
@@ -95,22 +102,45 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
               let file = remoteFile,
               let event = NSApp.currentEvent else { return }
 
-        let fileType = file.isDirectory ? UTType.folder.identifier : UTType.data.identifier
-        logger.info("Starting drag for \(file.isDirectory ? "directory" : "file"): \(file.path)")
+        let files = filesToDrag(startingFrom: file)
+        logger.info("Starting drag for \(files.count) item(s): \(files.map(\.path).joined(separator: ", "))")
 
         #if DEBUG
         if UITestSupport.isActive {
-            NotificationCenter.default.post(name: .uiTestDragSessionStarted, object: nil, userInfo: ["file": file.name])
+            NotificationCenter.default.post(
+                name: .uiTestDragSessionStarted,
+                object: nil,
+                userInfo: ["file": files.map(\.name).joined(separator: ", ")]
+            )
         }
         #endif
 
-        let provider = NSFilePromiseProvider(fileType: fileType, delegate: self)
-        provider.userInfo = FilePromiseInfo(remoteFile: file)
+        // One promise provider per dragged item; the delegate methods dispatch per-provider off
+        // each provider's `userInfo`, so a mixed file/directory selection fulfills correctly. The
+        // frames are fanned out slightly so a multi-item drag reads as a stack rather than a
+        // single overlapping icon.
+        let draggingItems = files.enumerated().map { index, file -> NSDraggingItem in
+            let fileType = file.isDirectory ? UTType.folder.identifier : UTType.data.identifier
+            let provider = NSFilePromiseProvider(fileType: fileType, delegate: self)
+            provider.userInfo = FilePromiseInfo(remoteFile: file)
 
-        let draggingItem = NSDraggingItem(pasteboardWriter: provider)
-        draggingItem.setDraggingFrame(bounds, contents: dragPreviewImage(for: file))
+            let item = NSDraggingItem(pasteboardWriter: provider)
+            let offset = CGFloat(index) * 6
+            item.setDraggingFrame(bounds.offsetBy(dx: offset, dy: offset), contents: dragPreviewImage(for: file))
+            return item
+        }
 
-        beginDraggingSession(with: [draggingItem], event: event, source: self)
+        beginDraggingSession(with: draggingItems, event: event, source: self)
+    }
+
+    /// The items a drag from `file` should carry: the whole current selection when `file` is part
+    /// of a multi-item selection, or just `file` otherwise — matching the context menu's
+    /// `effectiveSelection` convention (right-clicking within vs. outside a selection).
+    private func filesToDrag(startingFrom file: RemoteFile) -> [RemoteFile] {
+        guard selectedFiles.count > 1, selectedFiles.contains(where: { $0.id == file.id }) else {
+            return [file]
+        }
+        return selectedFiles
     }
 
     // MARK: - NSDraggingSource
@@ -258,12 +288,16 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
 
 struct FilePromiseDragSource: NSViewRepresentable {
     let file: RemoteFile
+    /// The whole current table selection; lets a drag begun on a selected row promise every
+    /// selected item. Defaults to empty for the single-item callers (e.g. previews).
+    var selectedFiles: [RemoteFile] = []
     var transferQueue: TransferQueueViewModel?
     var ftpClient: any FTPClientProtocol = FTPClient.shared
 
     func makeNSView(context: Context) -> FilePromiseDragSourceView {
         let view = FilePromiseDragSourceView()
         view.remoteFile = file
+        view.selectedFiles = selectedFiles
         view.ftpClient = ftpClient
         view.transferQueue = transferQueue
         return view
@@ -271,6 +305,7 @@ struct FilePromiseDragSource: NSViewRepresentable {
 
     func updateNSView(_ nsView: FilePromiseDragSourceView, context: Context) {
         nsView.remoteFile = file
+        nsView.selectedFiles = selectedFiles
         nsView.ftpClient = ftpClient
         nsView.transferQueue = transferQueue
     }
