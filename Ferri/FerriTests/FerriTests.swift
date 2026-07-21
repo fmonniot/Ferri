@@ -384,16 +384,25 @@ struct TransferQueueViewModelTests {
     }
 
     @Test
-    func retryTransferResetsFailedItem() {
-        let vm = TransferQueueViewModel()
-        let item = makeItem()
-        vm.addTransfer(item)
-        vm.updateTransfer(id: item.id, status: .failed, bytesTransferred: 256, errorMessage: "err")
+    func retryTransferResetsFailedItemAndRestartsDownload() async throws {
+        let mock = MockFTPClient()
+        let vm = TransferQueueViewModel(ftpClient: mock)
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("retry_\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: tempURL) }
 
-        vm.retryTransfer(id: item.id)
-        #expect(vm.transfers[0].status == .queued)
+        let id = vm.startDownload(file: RemoteFile(name: "file.txt", path: "/remote/file.txt", isDirectory: false, size: 1024), to: tempURL)
+        await waitUntil { vm.transfers.first?.status == .completed }
+        vm.updateTransfer(id: id, status: .failed, bytesTransferred: 256, errorMessage: "err")
+
+        vm.retryTransfer(id: id)
+        #expect(vm.transfers[0].status == .inProgress)
         #expect(vm.transfers[0].bytesTransferred == 0)
         #expect(vm.transfers[0].errorMessage == nil)
+
+        // The retry actually restarts the download rather than leaving the row stuck queued.
+        await waitUntil { vm.transfers.first?.status == .completed }
+        #expect(mock.downloadCalls.count == 2)
+        #expect(mock.downloadCalls[1].resumeOffset == 0)
     }
 
     @Test
@@ -599,10 +608,11 @@ struct TransferQueueViewModelTests {
         mock.shouldFailDownload = false
         vm.retryGroupFailed(id: groupID)
 
-        // Mirrors `retryTransfer`'s own contract (see `retryTransferResetsFailedItem`): retrying
-        // resets the failed child back to `.queued` without touching its already-done sibling.
+        // Mirrors `retryTransfer`'s own contract (see `retryTransferResetsFailedItemAndRestartsDownload`):
+        // retrying restarts the failed child's download without touching its already-done sibling.
         #expect(vm.transfers.first(where: { $0.id == okID })?.status == .completed)
-        #expect(vm.transfers.first(where: { $0.id == failID })?.status == .queued)
+        await waitUntil { vm.transfers.first(where: { $0.id == failID })?.status == .completed }
+        #expect(vm.transfers.first(where: { $0.id == failID })?.status == .completed)
     }
 
     @Test

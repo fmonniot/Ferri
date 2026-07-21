@@ -217,10 +217,11 @@ final class TransferQueueViewModel: ObservableObject {
         tasks[id] = nil
         stopReasons[id] = nil
 
-        transfers[index].status = .queued
+        transfers[index].status = .inProgress
         transfers[index].bytesTransferred = 0
         transfers[index].bytesPerSecond = nil
         transfers[index].errorMessage = nil
+        runDownload(id: id, resumeOffset: 0)
     }
 
     /// Retries every failed file in a directory-drag group.
