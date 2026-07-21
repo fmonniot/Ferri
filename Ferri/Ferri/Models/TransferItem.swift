@@ -25,6 +25,9 @@ struct TransferItem: Identifiable, Codable {
     var bytesTransferred: Int64
     var bytesPerSecond: Double?
     var errorMessage: String?
+    /// Set when this file was downloaded as part of a directory drag — the queue displays
+    /// such items rolled up under one `TransferGroup` row instead of individually.
+    var groupID: UUID?
 
     init(
         id: UUID = UUID(),
@@ -36,7 +39,8 @@ struct TransferItem: Identifiable, Codable {
         status: TransferStatus = .queued,
         bytesTransferred: Int64 = 0,
         bytesPerSecond: Double? = nil,
-        errorMessage: String? = nil
+        errorMessage: String? = nil,
+        groupID: UUID? = nil
     ) {
         self.id = id
         self.fileName = fileName
@@ -48,6 +52,7 @@ struct TransferItem: Identifiable, Codable {
         self.bytesTransferred = bytesTransferred
         self.bytesPerSecond = bytesPerSecond
         self.errorMessage = errorMessage
+        self.groupID = groupID
     }
     
     var progress: Double {

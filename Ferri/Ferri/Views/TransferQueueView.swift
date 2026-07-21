@@ -48,7 +48,7 @@ struct TransferQueueView: View {
             .background(Color(NSColor.controlBackgroundColor))
             
             if isExpanded {
-                if viewModel.transfers.isEmpty {
+                if viewModel.rows.isEmpty {
                     emptyView
                 } else {
                     transferList
@@ -73,13 +73,18 @@ struct TransferQueueView: View {
     
     private var transferList: some View {
         List {
-            ForEach(viewModel.transfers) { transfer in
-                TransferRow(transfer: transfer) {
-                    viewModel.removeTransfer(id: transfer.id)
-                } onRetry: {
-                    viewModel.retryTransfer(id: transfer.id)
-                } onTogglePause: {
-                    viewModel.togglePause(id: transfer.id)
+            ForEach(viewModel.rows) { row in
+                switch row {
+                case .file(let transfer):
+                    TransferRow(transfer: transfer) {
+                        viewModel.removeTransfer(id: transfer.id)
+                    } onRetry: {
+                        viewModel.retryTransfer(id: transfer.id)
+                    } onTogglePause: {
+                        viewModel.togglePause(id: transfer.id)
+                    }
+                case .group(let summary):
+                    TransferGroupRow(summary: summary, viewModel: viewModel)
                 }
             }
         }
@@ -177,5 +182,131 @@ struct TransferRow: View {
             .help("Remove")
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// The aggregate row for a directory drag: one line summarizing every file under it, with a
+/// disclosure to drop down into the same per-file `TransferRow`s a standalone download gets —
+/// pause/retry/remove on those rows still act on just that one file.
+struct TransferGroupRow: View {
+    let summary: TransferGroupSummary
+    @ObservedObject var viewModel: TransferQueueViewModel
+    @State private var isExpanded = false
+
+    private var badgeColor: Color {
+        switch summary.status {
+        case .failed: .red
+        case .paused: .orange
+        default: .accentColor
+        }
+    }
+
+    private var canPause: Bool {
+        summary.status == .inProgress || summary.status == .paused || summary.status == .queued
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Button {
+                    withAnimation { isExpanded.toggle() }
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .foregroundColor(.secondary)
+                        .frame(width: 12)
+                }
+                .buttonStyle(.borderless)
+
+                Image(systemName: "folder.fill")
+                    .foregroundColor(badgeColor)
+                    .frame(width: 22, height: 22)
+                    .background(badgeColor.opacity(0.14))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(summary.name)
+                        .font(.system(size: 13))
+                        .lineLimit(1)
+
+                    if summary.status == .inProgress || summary.status == .paused {
+                        ProgressView(value: summary.progress)
+                            .progressViewStyle(.linear)
+                            .tint(badgeColor)
+
+                        HStack(spacing: 4) {
+                            Text(summary.formattedProgress)
+                            Text("·")
+                            Text(summary.filesSummary)
+                            if summary.status == .paused {
+                                Text("· Paused")
+                                    .foregroundColor(.orange)
+                            } else if let speed = summary.formattedSpeed {
+                                Text("·")
+                                Text(speed)
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    } else if summary.status == .failed {
+                        Text("\(summary.filesFailed) of \(summary.filesTotal) files failed")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    } else if summary.status == .completed {
+                        Text("Completed · \(summary.filesSummary)")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    } else if summary.status == .cancelled {
+                        Text("Cancelled")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
+
+                Spacer()
+
+                if canPause {
+                    Button {
+                        viewModel.toggleGroupPause(id: summary.id)
+                    } label: {
+                        Image(systemName: summary.status == .paused ? "play.fill" : "pause.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .help(summary.status == .paused ? "Resume All" : "Pause All")
+                }
+
+                if summary.status == .failed {
+                    Button {
+                        viewModel.retryGroupFailed(id: summary.id)
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Retry Failed")
+                }
+
+                Button {
+                    viewModel.removeGroup(id: summary.id)
+                } label: {
+                    Image(systemName: "xmark")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Remove")
+            }
+            .padding(.vertical, 4)
+
+            if isExpanded {
+                ForEach(summary.items) { transfer in
+                    TransferRow(transfer: transfer) {
+                        viewModel.removeTransfer(id: transfer.id)
+                    } onRetry: {
+                        viewModel.retryTransfer(id: transfer.id)
+                    } onTogglePause: {
+                        viewModel.togglePause(id: transfer.id)
+                    }
+                    .padding(.leading, 34)
+                }
+            }
+        }
     }
 }

@@ -446,6 +446,166 @@ struct TransferQueueViewModelTests {
         await waitUntil { vm.transfers.first?.status == .completed }
         #expect(vm.transfers[0].status == .completed)
     }
+
+    // MARK: Directory-drag groups
+
+    private func groupSummary(_ vm: TransferQueueViewModel, id: UUID) -> TransferGroupSummary? {
+        for row in vm.rows {
+            if case .group(let summary) = row, summary.id == id { return summary }
+        }
+        return nil
+    }
+
+    private func makeTempDir() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("group_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @Test
+    func groupAggregatesChildFilesIntoOneRow() async throws {
+        let mock = MockFTPClient()
+        let vm = TransferQueueViewModel(ftpClient: mock)
+        let tempDir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let groupID = vm.startGroup(name: "project")
+        vm.startDownload(file: RemoteFile(name: "a.txt", path: "/project/a.txt", isDirectory: false, size: 12), to: tempDir.appendingPathComponent("a.txt"), groupID: groupID)
+        vm.startDownload(file: RemoteFile(name: "b.txt", path: "/project/b.txt", isDirectory: false, size: 12), to: tempDir.appendingPathComponent("b.txt"), groupID: groupID)
+
+        // One aggregate row, not one per file.
+        #expect(vm.rows.count == 1)
+        #expect(vm.transfers.count == 2)
+
+        await waitUntil { groupSummary(vm, id: groupID)?.status == .completed }
+        let summary = groupSummary(vm, id: groupID)
+        #expect(summary?.filesTotal == 2)
+        #expect(summary?.filesCompleted == 2)
+    }
+
+    @Test
+    func groupRowDisappearsOnceAllChildrenRemoved() async throws {
+        let mock = MockFTPClient()
+        let vm = TransferQueueViewModel(ftpClient: mock)
+        let tempDir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let groupID = vm.startGroup(name: "project")
+        let id = vm.startDownload(file: RemoteFile(name: "a.txt", path: "/project/a.txt", isDirectory: false, size: 12), to: tempDir.appendingPathComponent("a.txt"), groupID: groupID)
+
+        await waitUntil { vm.transfers.first?.status == .completed }
+        vm.removeTransfer(id: id)
+
+        #expect(vm.rows.isEmpty)
+        #expect(vm.groups.isEmpty)
+    }
+
+    @Test
+    func removeGroupCancelsAndRemovesAllChildren() async throws {
+        let mock = MockFTPClient()
+        mock.simulateSlowDownload = true
+        let vm = TransferQueueViewModel(ftpClient: mock)
+        let tempDir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let groupID = vm.startGroup(name: "project")
+        vm.startDownload(file: makeSlowFile(), to: tempDir.appendingPathComponent("a.bin"), groupID: groupID)
+        vm.startDownload(file: makeSlowFile(), to: tempDir.appendingPathComponent("b.bin"), groupID: groupID)
+
+        await waitUntil { vm.transfers.allSatisfy { $0.bytesTransferred > 0 } }
+
+        vm.removeGroup(id: groupID)
+
+        #expect(vm.transfers.isEmpty)
+        #expect(vm.rows.isEmpty)
+        #expect(vm.groups.isEmpty)
+    }
+
+    @Test
+    func toggleGroupPausePausesThenResumesAllChildren() async throws {
+        let mock = MockFTPClient()
+        mock.simulateSlowDownload = true
+        let vm = TransferQueueViewModel(ftpClient: mock)
+        let tempDir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let groupID = vm.startGroup(name: "project")
+        vm.startDownload(file: makeSlowFile(), to: tempDir.appendingPathComponent("a.bin"), groupID: groupID)
+        vm.startDownload(file: makeSlowFile(), to: tempDir.appendingPathComponent("b.bin"), groupID: groupID)
+
+        await waitUntil { vm.transfers.allSatisfy { $0.bytesTransferred > 0 } }
+
+        vm.toggleGroupPause(id: groupID)
+        await waitUntil { vm.transfers.allSatisfy { $0.status == .paused } }
+        #expect(vm.transfers.allSatisfy { $0.status == .paused })
+        #expect(groupSummary(vm, id: groupID)?.status == .paused)
+
+        vm.toggleGroupPause(id: groupID)
+        #expect(vm.transfers.allSatisfy { $0.status == .inProgress })
+
+        await waitUntil { groupSummary(vm, id: groupID)?.status == .completed }
+        #expect(groupSummary(vm, id: groupID)?.status == .completed)
+    }
+
+    @Test
+    func retryGroupFailedRetriesOnlyFailedChildren() async throws {
+        let mock = MockFTPClient()
+        let vm = TransferQueueViewModel(ftpClient: mock)
+        let tempDir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let groupID = vm.startGroup(name: "project")
+        let okID = vm.startDownload(file: RemoteFile(name: "ok.txt", path: "/project/ok.txt", isDirectory: false, size: 12), to: tempDir.appendingPathComponent("ok.txt"), groupID: groupID)
+        await waitUntil { vm.transfers.first(where: { $0.id == okID })?.status == .completed }
+
+        mock.shouldFailDownload = true
+        let failID = vm.startDownload(file: RemoteFile(name: "bad.txt", path: "/project/bad.txt", isDirectory: false, size: 12), to: tempDir.appendingPathComponent("bad.txt"), groupID: groupID)
+        await waitUntil { vm.transfers.first(where: { $0.id == failID })?.status == .failed }
+
+        mock.shouldFailDownload = false
+        vm.retryGroupFailed(id: groupID)
+
+        // Mirrors `retryTransfer`'s own contract (see `retryTransferResetsFailedItem`): retrying
+        // resets the failed child back to `.queued` without touching its already-done sibling.
+        #expect(vm.transfers.first(where: { $0.id == okID })?.status == .completed)
+        #expect(vm.transfers.first(where: { $0.id == failID })?.status == .queued)
+    }
+
+    @Test
+    func clearCompletedLeavesPartiallyActiveGroupIntact() async throws {
+        let mock = MockFTPClient()
+        let vm = TransferQueueViewModel(ftpClient: mock)
+        let tempDir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let groupID = vm.startGroup(name: "project")
+        let doneID = vm.startDownload(file: RemoteFile(name: "done.txt", path: "/project/done.txt", isDirectory: false, size: 12), to: tempDir.appendingPathComponent("done.txt"), groupID: groupID)
+        await waitUntil { vm.transfers.first(where: { $0.id == doneID })?.status == .completed }
+
+        mock.simulateSlowDownload = true
+        let activeID = vm.startDownload(file: makeSlowFile(), to: tempDir.appendingPathComponent("active.bin"), groupID: groupID)
+        await waitUntil { (vm.transfers.first(where: { $0.id == activeID })?.bytesTransferred ?? 0) > 0 }
+
+        vm.clearCompleted()
+
+        // The group still has an active file, so the aggregate row (and both children) stay.
+        #expect(vm.transfers.count == 2)
+        #expect(vm.rows.count == 1)
+
+        vm.removeGroup(id: groupID) // cleanup: cancel the still-running child
+    }
+
+    @Test
+    func removeGroupIfEmptyDropsGroupWithNoFiles() {
+        let vm = TransferQueueViewModel()
+        let groupID = vm.startGroup(name: "empty-folder")
+        #expect(vm.groups[groupID] != nil)
+
+        vm.removeGroupIfEmpty(id: groupID)
+
+        #expect(vm.groups[groupID] == nil)
+        #expect(vm.rows.isEmpty)
+    }
 }
 
 // MARK: - FileBrowserViewModel Tests

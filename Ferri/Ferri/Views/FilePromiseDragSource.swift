@@ -195,15 +195,16 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
     /// Downloads one file as a row in the transfer queue, so a drag to Finder shows the same
     /// progress, speed and pause/cancel controls as a download started from the app's own UI.
     /// Falls back to an untracked download when no queue is attached. `onBytes` receives the
-    /// running byte count so the caller can drive Finder's badge.
-    private func download(_ file: RemoteFile, to localURL: URL, onBytes: ((Int64) -> Void)? = nil) async throws {
+    /// running byte count so the caller can drive Finder's badge. `groupID` rolls this file
+    /// into a directory drag's aggregate transfer row instead of listing it on its own.
+    private func download(_ file: RemoteFile, to localURL: URL, groupID: UUID? = nil, onBytes: ((Int64) -> Void)? = nil) async throws {
         guard let transferQueue else {
             try await ftpClient.downloadFile(named: file.path, to: localURL) { bytesTransferred, _ in
                 onBytes?(bytesTransferred)
             }
             return
         }
-        try await transferQueue.downloadAndWait(file: file, to: localURL) { bytesTransferred in
+        try await transferQueue.downloadAndWait(file: file, to: localURL, groupID: groupID) { bytesTransferred in
             onBytes?(bytesTransferred)
         }
     }
@@ -215,7 +216,13 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
     /// isn't held up waiting on the listing, and the badge upgrades from indeterminate to a
     /// real pie once the total lands. Sizing failure is deliberately non-fatal — it only
     /// costs the badge its total, so it must not take the download down with it.
+    ///
+    /// The transfer queue gets one aggregate row for the whole tree (`TransferGroup`) rather
+    /// than one row per file — the same sizing pass feeds both the Finder badge's total and
+    /// the group row's total.
     private func downloadDirectory(_ file: RemoteFile, to localURL: URL, progress: Progress) async throws {
+        let groupID = transferQueue?.startGroup(name: file.name)
+
         let sizing = Task { @MainActor in
             guard let files = try? await ftpClient.listDirectoryRecursively(at: file.path) else {
                 logger.debug("Sizing pass failed for \(file.path); badge stays indeterminate")
@@ -224,19 +231,29 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
             let total = files.reduce(Int64(0)) { $0 + $1.size }
             logger.info("Sized \(file.path): \(files.count) files, \(total) bytes")
             progress.totalUnitCount = total
+            if let groupID {
+                transferQueue?.updateGroupTotalBytes(id: groupID, totalBytes: total)
+            }
         }
         defer { sizing.cancel() }
 
         try await downloadDirectoryRecursively(
             remotePath: file.path,
             to: localURL,
-            tree: TreeProgress(progress: progress)
+            tree: TreeProgress(progress: progress),
+            groupID: groupID
         )
+
+        // An empty directory never downloads a file to hang the group row's aggregate off of;
+        // drop it rather than leaving an invisible, un-removable entry in the queue's bookkeeping.
+        if let groupID {
+            transferQueue?.removeGroupIfEmpty(id: groupID)
+        }
     }
 
     /// Downloads an entire remote directory tree to a local URL, preserving structure.
     /// Each file is downloaded independently and streams to disk as bytes arrive.
-    private func downloadDirectoryRecursively(remotePath: String, to localURL: URL, tree: TreeProgress?) async throws {
+    private func downloadDirectoryRecursively(remotePath: String, to localURL: URL, tree: TreeProgress?, groupID: UUID?) async throws {
         logger.debug("Creating local directory: \(localURL.path)")
         try FileManager.default.createDirectory(at: localURL, withIntermediateDirectories: true)
 
@@ -246,12 +263,10 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         for entry in entries {
             let childURL = localURL.appendingPathComponent(entry.name)
             if entry.isDirectory {
-                try await downloadDirectoryRecursively(remotePath: entry.path, to: childURL, tree: tree)
+                try await downloadDirectoryRecursively(remotePath: entry.path, to: childURL, tree: tree, groupID: groupID)
             } else {
                 logger.debug("Downloading file: \(entry.path) -> \(childURL.path)")
-                // One queue row per file rather than one for the whole tree: the transfer
-                // rows are sized and driven per file, and a listing gives no total up front.
-                try await download(entry, to: childURL) { tree?.update(currentFileBytes: $0) }
+                try await download(entry, to: childURL, groupID: groupID) { tree?.update(currentFileBytes: $0) }
                 tree?.finish(fileBytes: entry.size)
                 logger.debug("Downloaded: \(entry.name)")
             }
