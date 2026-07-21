@@ -101,15 +101,45 @@ final class FileBrowserViewModel: ObservableObject {
             files = sortFiles(result)
             currentPath = ftpClient.currentPath
         } catch {
-            // SFTP status code 3 is SSH_FX_PERMISSION_DENIED (SFTPv3 spec).
-            if case SFTPClientError.requestFailed(let code, _) = error, code == 3 {
-                isPermissionDenied = true
+            // A dropped connection (laptop sleep, network blip) surfaces as some non-protocol
+            // error from listDirectory rather than a clean "not connected" signal, since the dead
+            // channel is only ever detected on next use. Reconnecting is the one recovery worth
+            // attempting automatically; anything the server itself rejected (SFTPClientError
+            // .requestFailed, e.g. permission denied) is not a connection problem and reconnecting
+            // wouldn't help.
+            if isReconnectWorthy(error), let server = connectionViewModel?.selectedConnection {
+                await reconnectAndRetry(server: server, path: path)
             } else {
-                errorMessage = error.localizedDescription
+                applyLoadError(error)
             }
         }
 
         isLoading = false
+    }
+
+    private func isReconnectWorthy(_ error: Error) -> Bool {
+        if case SFTPClientError.requestFailed = error { return false }
+        return true
+    }
+
+    private func reconnectAndRetry(server: FTPServer, path: String) async {
+        do {
+            try await ftpClient.connect(to: server)
+            let result = try await ftpClient.listDirectory(at: path)
+            files = sortFiles(result)
+            currentPath = ftpClient.currentPath
+        } catch {
+            errorMessage = "The connection was lost and could not be re-established: \(error.localizedDescription)"
+        }
+    }
+
+    private func applyLoadError(_ error: Error) {
+        // SFTP status code 3 is SSH_FX_PERMISSION_DENIED (SFTPv3 spec).
+        if case SFTPClientError.requestFailed(let code, _) = error, code == 3 {
+            isPermissionDenied = true
+        } else {
+            errorMessage = error.localizedDescription
+        }
     }
     
     func sortBy(_ column: SortColumn) {

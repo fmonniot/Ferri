@@ -17,6 +17,11 @@ final class MockFTPClient: FTPClientProtocol, @unchecked Sendable {
     var shouldFailListDirectory = false
     var listDirectoryError: Error = FTPClientError.notConnected
     var mockCurrentPath = "/"
+    var shouldFailConnect = false
+    var connectError: Error = SFTPClientError.authenticationFailed("bad credentials")
+    /// Simulates a real reconnect clearing up whatever made listDirectory fail (e.g. a dropped
+    /// channel) — flips `shouldFailListDirectory` back off once `connect` succeeds.
+    var clearListDirectoryFailureOnConnect = false
 
     /// When true, `downloadFile` streams progress slowly (in `slowChunk`-sized steps every
     /// `slowChunkDelayNanos`) up to `slowTotalBytes`, honoring task cancellation by throwing
@@ -58,8 +63,12 @@ final class MockFTPClient: FTPClientProtocol, @unchecked Sendable {
     var currentPath: String { mockCurrentPath }
 
     func connect(to server: FTPServer) async throws {
+        if shouldFailConnect { throw connectError }
         connectCalls.append(server)
         isConnected = true
+        if clearListDirectoryFailureOnConnect {
+            shouldFailListDirectory = false
+        }
     }
 
     func disconnect() {
@@ -674,6 +683,77 @@ struct FileBrowserViewModelTests {
         #expect(vm.files.isEmpty)
         #expect(vm.errorMessage != nil)
         #expect(vm.isLoading == false)
+    }
+
+    @Test
+    func refreshReconnectsAndRetriesOnConnectionLostError() async {
+        let mock = makeMockClient(files: sampleFiles())
+        mock.shouldFailListDirectory = true
+        mock.listDirectoryError = FTPClientError.notConnected
+        mock.clearListDirectoryFailureOnConnect = true
+
+        let vm = FileBrowserViewModel(ftpClient: mock)
+        let connectionVM = ConnectionListViewModel()
+        let server = FTPServer(name: "Test", host: "example.com", port: 22, username: "user", password: "pass")
+        connectionVM.selectConnection(server)
+        vm.setConnectionViewModel(connectionVM)
+
+        await vm.refresh()
+
+        #expect(mock.connectCalls.count == 1)
+        #expect(vm.files.count == 3)
+        #expect(vm.errorMessage == nil)
+    }
+
+    @Test
+    func refreshSurfacesErrorWhenReconnectFails() async {
+        let mock = makeMockClient()
+        mock.shouldFailListDirectory = true
+        mock.listDirectoryError = FTPClientError.notConnected
+        mock.shouldFailConnect = true
+
+        let vm = FileBrowserViewModel(ftpClient: mock)
+        let connectionVM = ConnectionListViewModel()
+        let server = FTPServer(name: "Test", host: "example.com", port: 22, username: "user", password: "pass")
+        connectionVM.selectConnection(server)
+        vm.setConnectionViewModel(connectionVM)
+
+        await vm.refresh()
+
+        #expect(mock.connectCalls.isEmpty)
+        #expect(vm.errorMessage != nil)
+    }
+
+    @Test
+    func refreshDoesNotReconnectOnPermissionDenied() async {
+        let mock = makeMockClient()
+        mock.shouldFailListDirectory = true
+        mock.listDirectoryError = SFTPClientError.requestFailed(3, "Permission denied")
+
+        let vm = FileBrowserViewModel(ftpClient: mock)
+        let connectionVM = ConnectionListViewModel()
+        let server = FTPServer(name: "Test", host: "example.com", port: 22, username: "user", password: "pass")
+        connectionVM.selectConnection(server)
+        vm.setConnectionViewModel(connectionVM)
+
+        await vm.refresh()
+
+        #expect(mock.connectCalls.isEmpty)
+        #expect(vm.isPermissionDenied == true)
+    }
+
+    @Test
+    func refreshWithoutConnectionViewModelJustSurfacesError() async {
+        let mock = makeMockClient()
+        mock.shouldFailListDirectory = true
+        mock.listDirectoryError = FTPClientError.notConnected
+
+        let vm = FileBrowserViewModel(ftpClient: mock)
+
+        await vm.refresh()
+
+        #expect(mock.connectCalls.isEmpty)
+        #expect(vm.errorMessage != nil)
     }
 
     @Test
