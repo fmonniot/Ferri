@@ -102,7 +102,7 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
               let file = remoteFile,
               let event = NSApp.currentEvent else { return }
 
-        let files = filesToDrag(startingFrom: file)
+        let files = FilePromiseDragPlanning.filesToDrag(startingFrom: file, selectedFiles: selectedFiles)
         logger.info("Starting drag for \(files.count) item(s): \(files.map(\.path).joined(separator: ", "))")
 
         #if DEBUG
@@ -120,27 +120,17 @@ class FilePromiseDragSourceView: NSView, NSDraggingSource, NSFilePromiseProvider
         // frames are fanned out slightly so a multi-item drag reads as a stack rather than a
         // single overlapping icon.
         let draggingItems = files.enumerated().map { index, file -> NSDraggingItem in
-            let fileType = file.isDirectory ? UTType.folder.identifier : UTType.data.identifier
+            let fileType = FilePromiseDragPlanning.fileType(for: file)
             let provider = NSFilePromiseProvider(fileType: fileType, delegate: self)
             provider.userInfo = FilePromiseInfo(remoteFile: file)
 
             let item = NSDraggingItem(pasteboardWriter: provider)
-            let offset = CGFloat(index) * 6
-            item.setDraggingFrame(bounds.offsetBy(dx: offset, dy: offset), contents: dragPreviewImage(for: file))
+            let frame = FilePromiseDragPlanning.draggingFrame(bounds: bounds, index: index)
+            item.setDraggingFrame(frame, contents: dragPreviewImage(for: file))
             return item
         }
 
         beginDraggingSession(with: draggingItems, event: event, source: self)
-    }
-
-    /// The items a drag from `file` should carry: the whole current selection when `file` is part
-    /// of a multi-item selection, or just `file` otherwise — matching the context menu's
-    /// `effectiveSelection` convention (right-clicking within vs. outside a selection).
-    private func filesToDrag(startingFrom file: RemoteFile) -> [RemoteFile] {
-        guard selectedFiles.count > 1, selectedFiles.contains(where: { $0.id == file.id }) else {
-            return [file]
-        }
-        return selectedFiles
     }
 
     // MARK: - NSDraggingSource
