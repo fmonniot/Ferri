@@ -15,9 +15,10 @@ final class ConnectionListViewModel: ObservableObject {
     @Published var selectedConnection: FTPServer?
     @Published var connectionStatus: [UUID: ConnectionStatus] = [:]
     
-    private let storage = ConnectionStorage.shared
-    
-    init() {
+    private let storage: ConnectionStorage
+
+    init(storage: ConnectionStorage = .shared) {
+        self.storage = storage
         loadConnections()
     }
     

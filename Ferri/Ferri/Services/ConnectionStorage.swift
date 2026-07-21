@@ -3,20 +3,26 @@ import FTPClient
 
 final class ConnectionStorage {
     static let shared = ConnectionStorage()
-    
+
     private let fileManager = FileManager.default
+    private let baseDirectory: URL
     private var storageURL: URL {
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let appFolder = appSupport.appendingPathComponent("iFTP", isDirectory: true)
-        
-        if !fileManager.fileExists(atPath: appFolder.path) {
-            try? fileManager.createDirectory(at: appFolder, withIntermediateDirectories: true)
+        if !fileManager.fileExists(atPath: baseDirectory.path) {
+            try? fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
         }
-        
-        return appFolder.appendingPathComponent("connections.plist")
+
+        return baseDirectory.appendingPathComponent("connections.plist")
     }
-    
-    private init() {}
+
+    init(baseDirectory: URL) {
+        self.baseDirectory = baseDirectory
+    }
+
+    private convenience init() {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appFolder = appSupport.appendingPathComponent("iFTP", isDirectory: true)
+        self.init(baseDirectory: appFolder)
+    }
     
     func loadConnections() -> [FTPServer] {
         guard fileManager.fileExists(atPath: storageURL.path) else {
