@@ -43,17 +43,6 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 180, ideal: 220)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: {
-                    editingConnection = nil
-                    showingConnectionSheet = true
-                }) {
-                    Image(systemName: "plus")
-                }
-                .help("Add Connection")
-            }
-        }
     }
 }
 

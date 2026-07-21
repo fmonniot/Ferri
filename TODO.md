@@ -9,6 +9,5 @@ Open issues, written to be actionable by a future session without extra context-
 
 # To be triaged
 
-- Remove the overflow menu that only contains "add a new connection". That button is already in the left pane. Same logic for the refresh button, it's already next to the navigation buttons.
 - **`retryTransfer` (`Ferri/Ferri/ViewModels/TransferQueueViewModel.swift`) doesn't actually restart the download.** It resets a failed/cancelled row's status to `.queued` and clears its bytes/error, but never calls `runDownload` — so clicking "Retry" in the transfer queue just leaves the row stuck at `.queued` forever. Compare with `togglePause`'s resume branch, which does call `runDownload(id:resumeOffset:)` after flipping status. Found while adding group-retry support (`retryGroupFailed`), which inherits the same gap since it delegates to `retryTransfer` per failed child.
 

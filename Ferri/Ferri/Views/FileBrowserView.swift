@@ -60,16 +60,6 @@ struct FileBrowserView: View {
                     Image(systemName: "arrow.clockwise")
                 }
             }
-
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button("Refresh") {
-                        Task { await viewModel.refresh() }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-            }
         }
         .sheet(item: $infoFile) { file in
             GetInfoView(file: file)
