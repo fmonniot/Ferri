@@ -8,8 +8,16 @@
 import SwiftUI
 import FTPClient
 
+final class FerriAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+}
+
 @main
 struct FerriApp: App {
+    @NSApplicationDelegateAdaptor(FerriAppDelegate.self) var appDelegate
+
     init() {
         FerriLogging.bootstrap()
     }
