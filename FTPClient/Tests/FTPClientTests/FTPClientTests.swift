@@ -493,6 +493,32 @@ struct RemoteFileTests {
     }
 }
 
+// MARK: - SFTPClientError Tests
+
+struct SFTPClientErrorTests {
+
+    // `LocalizedError` conformance is what makes `error.localizedDescription` surface
+    // `description`'s text instead of NSError's generic "The operation couldn't be
+    // completed. (FTPClient.SFTPClientError error N.)" fallback.
+    @Test
+    func testLocalizedDescriptionMatchesDescription() {
+        let errors: [SFTPClientError] = [
+            .connectionFailed("host unreachable"),
+            .authenticationFailed("bad key"),
+            .subsystemOpenFailed("denied"),
+            .requestFailed(3, "Permission denied"),
+            .notConnected,
+            .invalidResponse,
+            .channelClosed,
+            .timeout("30s"),
+        ]
+
+        for error in errors {
+            #expect(error.localizedDescription == error.description)
+        }
+    }
+}
+
 // MARK: - Integration Tests (Docker Compose)
 //
 // Prerequisites:

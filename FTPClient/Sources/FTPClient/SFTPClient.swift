@@ -7,7 +7,7 @@ import Logging
 
 private let logger = Logger(label: "com.ftpclient.sftp")
 
-public enum SFTPClientError: Error, CustomStringConvertible, Sendable {
+public enum SFTPClientError: Error, CustomStringConvertible, LocalizedError, Sendable {
     case connectionFailed(String)
     case authenticationFailed(String)
     case subsystemOpenFailed(String)
@@ -29,6 +29,12 @@ public enum SFTPClientError: Error, CustomStringConvertible, Sendable {
         case .timeout(let msg): return "Timeout: \(msg)"
         }
     }
+
+    // Without this, `error.localizedDescription` falls back to NSError's generic
+    // "The operation couldn't be completed. (FTPClient.SFTPClientError error N.)" instead of
+    // `description` above, since Swift errors only bridge their custom description through
+    // LocalizedError.
+    public var errorDescription: String? { description }
 }
 
 public struct SFTPCredentials: Sendable {

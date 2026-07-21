@@ -7,9 +7,18 @@ import FTPClient
 /// `FerriUITests` drive the file browser deterministically without Docker/a live SFTP server.
 enum UITestSupport {
     static let launchArgument = "-UITestMode"
+    /// Additional launch argument that makes `MainView` route the initial listing through
+    /// `FileBrowserViewModel.loadInitialDirectory(at:)` against a path `UITestMockFTPClient`
+    /// is rigged to fail, exercising the same fallback-to-root + dismissible warning banner
+    /// a real misconfigured `FTPServer.initialDirectoryPath` triggers.
+    static let badInitialDirectoryLaunchArgument = "-UITestModeBadInitialDirectory"
 
     static var isActive: Bool {
-        ProcessInfo.processInfo.arguments.contains(launchArgument)
+        ProcessInfo.processInfo.arguments.contains(launchArgument) || isBadInitialDirectoryActive
+    }
+
+    static var isBadInitialDirectoryActive: Bool {
+        ProcessInfo.processInfo.arguments.contains(badInitialDirectoryLaunchArgument)
     }
 }
 
@@ -51,8 +60,19 @@ final class UITestMockFTPClient: FTPClientProtocol, @unchecked Sendable {
         isConnected = false
     }
 
+    /// Fixed path `-UITestModeBadInitialDirectory` points `initialDirectoryPath` at, standing in
+    /// for a real server's misconfigured/removed folder - deliberately outside `filesByPath` so
+    /// this always throws.
+    static let missingPath = "/DoesNotExist"
+
     func listDirectory(at path: String) async throws -> [RemoteFile] {
-        currentPath = resolvePath(path)
+        let resolved = resolvePath(path)
+        if resolved == Self.missingPath {
+            // Only set currentPath on success, mirroring the real SFTPClient, so a failed
+            // lookup doesn't strand `currentPath` on a path that was never actually loaded.
+            throw SFTPClientError.requestFailed(3, "Permission denied")
+        }
+        currentPath = resolved
         return filesByPath[currentPath] ?? []
     }
 

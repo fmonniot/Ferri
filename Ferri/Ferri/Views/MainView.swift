@@ -74,6 +74,28 @@ struct MainView: View {
                     #endif
                 }
                 .frame(minHeight: 200, maxHeight: .infinity)
+                #if DEBUG
+                .overlay(alignment: .topTrailing) {
+                    if UITestSupport.isActive {
+                        // `connect(to:)` below always goes through the real `FTPClient.shared`,
+                        // never the mock `-UITestMode` wires up, so switching saved connections
+                        // can't be driven end-to-end from a UI test. This stand-in exercises the
+                        // same `loadInitialDirectory` call a real "connect to a different,
+                        // correctly-configured server" would make - the regression it guards is a
+                        // warning banner from a prior connection's fallback surviving into the
+                        // next connection because nothing had cleared it. Anchored to the top-right
+                        // corner (over the plain-SwiftUI path bar, not the Table) rather than
+                        // centered in the ZStack - centered there put it behind the file table's
+                        // NSTableView, which intercepted the click before the button ever saw it.
+                        Button("Simulate Connect To Another Server") {
+                            Task { await fileBrowserViewModel.loadInitialDirectory(at: "/") }
+                        }
+                        .accessibilityIdentifier("debug.simulateConnectToAnotherServer")
+                        .opacity(0.01)
+                        .frame(width: 12, height: 12)
+                    }
+                }
+                #endif
 
                 TransferQueueView(
                     viewModel: transferQueueViewModel,
@@ -132,7 +154,11 @@ struct MainView: View {
             #if DEBUG
             if UITestSupport.isActive {
                 isConnected = true
-                Task { await fileBrowserViewModel.loadDirectory() }
+                if UITestSupport.isBadInitialDirectoryActive {
+                    Task { await fileBrowserViewModel.loadInitialDirectory(at: UITestMockFTPClient.missingPath) }
+                } else {
+                    Task { await fileBrowserViewModel.loadDirectory() }
+                }
                 return
             }
             #endif
@@ -184,7 +210,7 @@ struct MainView: View {
                 isConnected = true
                 connectingServer = nil
                 connectionViewModel.setConnectionStatus(.connected, for: server.id)
-                await fileBrowserViewModel.loadDirectory(at: server.initialDirectoryPath ?? "")
+                await fileBrowserViewModel.loadInitialDirectory(at: server.initialDirectoryPath ?? "")
             } catch {
                 isConnected = false
                 connectingServer = nil

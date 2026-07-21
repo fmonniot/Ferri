@@ -16,6 +16,9 @@ final class MockFTPClient: FTPClientProtocol, @unchecked Sendable {
     var downloadError: Error = FTPClientError.notConnected
     var shouldFailListDirectory = false
     var listDirectoryError: Error = FTPClientError.notConnected
+    /// Paths that fail regardless of `shouldFailListDirectory` - lets a test simulate one path
+    /// failing (e.g. a misconfigured initial directory) while another (e.g. root) still succeeds.
+    var failListDirectoryForPaths: Set<String> = []
     var mockCurrentPath = "/"
     var shouldFailConnect = false
     var connectError: Error = SFTPClientError.authenticationFailed("bad credentials")
@@ -80,7 +83,7 @@ final class MockFTPClient: FTPClientProtocol, @unchecked Sendable {
         callTrackingLock.lock()
         _listDirectoryCalls.append(path)
         callTrackingLock.unlock()
-        if shouldFailListDirectory { throw listDirectoryError }
+        if shouldFailListDirectory || failListDirectoryForPaths.contains(path) { throw listDirectoryError }
         if let files = mockFilesByPath[path] { return files }
         return mockFiles
     }
@@ -683,6 +686,84 @@ struct FileBrowserViewModelTests {
         #expect(vm.files.isEmpty)
         #expect(vm.errorMessage != nil)
         #expect(vm.isLoading == false)
+    }
+
+    @Test
+    func loadInitialDirectorySucceedsWithoutWarning() async {
+        let mock = makeMockClient(files: sampleFiles(), currentPath: "/home")
+        let vm = FileBrowserViewModel(ftpClient: mock)
+
+        await vm.loadInitialDirectory(at: "/home")
+
+        #expect(vm.files.count == 3)
+        #expect(vm.currentPath == "/home")
+        #expect(vm.initialDirectoryWarning == nil)
+    }
+
+    @Test
+    func loadInitialDirectoryWithEmptyPathLoadsRootDirectly() async {
+        let mock = makeMockClient(files: sampleFiles(), currentPath: "/")
+        let vm = FileBrowserViewModel(ftpClient: mock)
+
+        await vm.loadInitialDirectory(at: "")
+
+        #expect(mock.listDirectoryCalls == ["/"])
+        #expect(vm.initialDirectoryWarning == nil)
+    }
+
+    @Test
+    func loadInitialDirectoryFallsBackToRootWhenConfiguredPathFails() async {
+        let mock = makeMockClient(files: sampleFiles(), currentPath: "/")
+        mock.failListDirectoryForPaths = ["/broken"]
+        mock.listDirectoryError = SFTPClientError.requestFailed(3, "Permission denied")
+
+        let vm = FileBrowserViewModel(ftpClient: mock)
+
+        await vm.loadInitialDirectory(at: "/broken")
+
+        #expect(mock.listDirectoryCalls == ["/broken", "/"])
+        #expect(vm.currentPath == "/")
+        #expect(vm.files.count == 3)
+        #expect(vm.errorMessage == nil)
+        #expect(vm.isPermissionDenied == false)
+        #expect(vm.initialDirectoryWarning?.contains("/broken") == true)
+    }
+
+    @Test
+    func dismissInitialDirectoryWarningClearsIt() async {
+        let mock = makeMockClient(files: sampleFiles(), currentPath: "/")
+        mock.failListDirectoryForPaths = ["/broken"]
+        mock.listDirectoryError = SFTPClientError.requestFailed(3, "Permission denied")
+
+        let vm = FileBrowserViewModel(ftpClient: mock)
+        await vm.loadInitialDirectory(at: "/broken")
+        #expect(vm.initialDirectoryWarning != nil)
+
+        vm.dismissInitialDirectoryWarning()
+
+        #expect(vm.initialDirectoryWarning == nil)
+    }
+
+    /// `MainView.connect` doesn't call `reset()` when switching to a different saved connection
+    /// (only an explicit "Disconnect" does), so a warning from a previous connection's fallback
+    /// must not survive into the next one just because the user never dismissed it.
+    @Test
+    func loadInitialDirectoryOnNewConnectionClearsStaleWarningWhenPathIsFine() async {
+        let mock = makeMockClient(files: sampleFiles(), currentPath: "/")
+        mock.failListDirectoryForPaths = ["/broken"]
+        mock.listDirectoryError = SFTPClientError.requestFailed(3, "Permission denied")
+
+        let vm = FileBrowserViewModel(ftpClient: mock)
+        await vm.loadInitialDirectory(at: "/broken")
+        #expect(vm.initialDirectoryWarning != nil)
+
+        // Simulates connecting to a second, correctly-configured server without dismissing
+        // the first warning.
+        mock.failListDirectoryForPaths = []
+        await vm.loadInitialDirectory(at: "/home")
+
+        #expect(vm.initialDirectoryWarning == nil)
+        #expect(vm.errorMessage == nil)
     }
 
     @Test

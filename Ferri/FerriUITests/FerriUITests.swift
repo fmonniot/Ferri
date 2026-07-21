@@ -37,9 +37,9 @@ final class FerriUITests: XCTestCase {
         launchedApp = nil
     }
 
-    private func launchApp() -> XCUIApplication {
+    private func launchApp(extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-UITestMode"]
+        app.launchArguments = ["-UITestMode"] + extraArguments
         app.launch()
         launchedApp = app
         return app
@@ -164,6 +164,53 @@ final class FerriUITests: XCTestCase {
             usleep(100_000)
         }
         XCTAssertEqual(dragStatus.value as? String, "readme.txt", "Dragging a row should reach beginDraggingSession")
+    }
+
+    /// Regression test for the initial-directory-fallback fix: a misconfigured
+    /// `FTPServer.initialDirectoryPath` must fall back to `/` and show a dismissible warning
+    /// banner instead of stranding the browser on a hard error. `-UITestModeBadInitialDirectory`
+    /// (`UITestSupport`) routes `MainView`'s post-connect load through
+    /// `loadInitialDirectory(at: UITestMockFTPClient.missingPath)`, a path the mock always fails.
+    @MainActor
+    func testMisconfiguredInitialDirectoryFallsBackToRootWithDismissibleWarning() throws {
+        // Literal rather than referencing UITestSupport/UITestMockFTPClient directly - this UI
+        // test target runs the compiled app as a separate process (no @testable import), so it
+        // only has access to the launch argument string and the accessibility identifiers below.
+        let app = launchApp(extraArguments: ["-UITestModeBadInitialDirectory"])
+
+        // Fallback succeeded: the root listing (readme.txt, from the fixed tree) is showing,
+        // not a hard error/permission-denied page.
+        XCTAssertTrue(app.staticTexts["file.readme.txt"].waitForExistence(timeout: 5))
+
+        let warning = app.staticTexts["initialDirectoryWarning.message"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 5))
+        XCTAssertTrue((warning.value as? String ?? "").contains("/DoesNotExist"))
+
+        app.buttons["initialDirectoryWarning.dismiss"].click()
+        XCTAssertFalse(warning.waitForExistence(timeout: 2), "Dismissing should remove the warning banner")
+
+        // The fallback listing itself must remain intact after dismissing the warning.
+        XCTAssertTrue(app.staticTexts["file.readme.txt"].exists)
+    }
+
+    /// Regression test: a warning banner left over from one connection's fallback must not
+    /// survive into the next connection just because the user never dismissed it - switching
+    /// saved connections doesn't call `reset()` (only "Disconnect" does), so
+    /// `loadInitialDirectory` itself has to clear any stale warning up front.
+    @MainActor
+    func testWarningIsResetWhenConnectingToAnotherServerWithoutDismissing() throws {
+        let app = launchApp(extraArguments: ["-UITestModeBadInitialDirectory"])
+
+        let warning = app.staticTexts["initialDirectoryWarning.message"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 5), "Warning should be showing from the misconfigured initial directory")
+
+        // Simulates connecting to a second, correctly-configured server without touching the
+        // dismiss button first (see the button's doc comment in MainView for why this stand-in
+        // is needed instead of driving a real second connection).
+        app.buttons["debug.simulateConnectToAnotherServer"].click()
+
+        XCTAssertFalse(warning.waitForExistence(timeout: 5), "Connecting to a new server should clear the previous connection's warning")
+        XCTAssertTrue(app.staticTexts["file.readme.txt"].exists, "The new connection's listing should still be showing")
     }
 
     @MainActor

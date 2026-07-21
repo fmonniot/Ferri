@@ -21,6 +21,9 @@ struct FileBrowserView: View {
             if isConnected {
                 pathBar
             }
+            if let warning = viewModel.initialDirectoryWarning {
+                initialDirectoryWarningBanner(warning)
+            }
             if !isConnected {
                 emptyStateView
             } else if viewModel.isLoading {
@@ -101,6 +104,35 @@ struct FileBrowserView: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 34)
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+    }
+
+    private func initialDirectoryWarningBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12))
+                .foregroundColor(.yellow)
+            Text(message)
+                .font(.system(size: 11.5))
+                .foregroundColor(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("initialDirectoryWarning.message")
+            Spacer(minLength: 8)
+            Button {
+                viewModel.dismissInitialDirectoryWarning()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("initialDirectoryWarning.dismiss")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color.yellow.opacity(0.12))
         .overlay(alignment: .bottom) {
             Divider()
         }

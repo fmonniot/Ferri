@@ -23,6 +23,11 @@ final class FileBrowserViewModel: ObservableObject {
     @Published var isPermissionDenied = false
     @Published var sortColumn: SortColumn = .name
     @Published var sortOrder: SortOrder = .ascending
+
+    /// Set when `loadInitialDirectory` had to fall back to `/` because the connection's
+    /// configured starting folder failed to load. Dismissible rather than a hard error, since
+    /// the browser recovers on its own by showing root instead.
+    @Published var initialDirectoryWarning: String?
     
     @Published var pathHistory: [String] = []
     @Published var historyIndex: Int = -1
@@ -54,6 +59,36 @@ final class FileBrowserViewModel: ObservableObject {
     func loadDirectory(at path: String = "") async {
         await performLoad(at: path)
         addToHistory(currentPath)
+    }
+
+    /// Loads a saved connection's configured starting folder right after connecting. Unlike
+    /// plain `loadDirectory`, a failure here (misconfigured `initialDirectoryPath` - nonexistent
+    /// or unreadable on the server) falls back to `/` instead of leaving the browser stuck on a
+    /// hard error, and surfaces the reason as a dismissible `initialDirectoryWarning` instead.
+    func loadInitialDirectory(at path: String) async {
+        // Connecting to a different server doesn't call `reset()` (see `MainView.connect`), so
+        // without this a warning left over from a previous connection's fallback would still be
+        // showing even though this connection's starting folder loaded fine.
+        initialDirectoryWarning = nil
+
+        let target = path.isEmpty ? "/" : path
+        await performLoad(at: target)
+
+        if target != "/", errorMessage != nil || isPermissionDenied {
+            let reason = isPermissionDenied
+                ? "You don't have permission to access it."
+                : (errorMessage ?? "It could not be opened.")
+            errorMessage = nil
+            isPermissionDenied = false
+            await performLoad(at: "/")
+            initialDirectoryWarning = "Couldn't open the configured starting folder \"\(target)\": \(reason) Showing the root directory instead."
+        }
+
+        addToHistory(currentPath)
+    }
+
+    func dismissInitialDirectoryWarning() {
+        initialDirectoryWarning = nil
     }
 
     func refresh() async {
@@ -203,6 +238,7 @@ final class FileBrowserViewModel: ObservableObject {
         isLoading = false
         errorMessage = nil
         isPermissionDenied = false
+        initialDirectoryWarning = nil
         pathHistory = []
         historyIndex = -1
     }
